@@ -1,0 +1,13 @@
+INFO [2020-10-10 15:48:25] Welcome to QB Decision Making with Tracking Data!
+          This script controls all of the values generated in
+          the thesis defended in August of 2020. Changes will
+          be made as this continues to be updated.
+INFO [2020-10-10 15:48:27] Loading packages. A few gotchas might exist for 4.0.x users
+          with future, furrr, dtwclust, and glmnet. Be sure to reinstall
+          codetools, survival, class, and cluster. If problem persists,
+          probably more missing dependencies.
+INFO [2020-10-10 15:49:17] Loading helper functions
+INFO [2020-10-10 15:49:17] Some of these functions are still hardcoded to original dataset.
+           General updates are in progress for robustness.
+INFO [2020-10-10 15:49:19] Beginning of the condensed QB evaluation. Running on the first 6 weeks of the 2017-2018 NFL
+          season.

@@ -12,6 +12,7 @@
 setwd("src")
 
 # Start the log
+library(futile.logger)
 flog.appender(appender.file('logs/main_log.log'), 'main')
 flog.info('Welcome to QB Decision Making with Tracking Data!
           This script controls all of the values generated in
@@ -27,7 +28,7 @@ flog.info('Loading packages. A few gotchas might exist for 4.0.x users
 # Load Packages
 pacman::p_load(gganimate, cowplot, gifski, bezier, magrittr, 
                funHDDC,  broom, ggridges, mvtnorm, scales,
-               data.table, snakecase, tictoc, futile.logger, glue,
+               data.table, snakecase, tictoc, glue,
                tidyverse, nflscrapR, future, furrr, dtwclust, glmnet)
 
 flog.info('Loading helper functions', name = 'main')

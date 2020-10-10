@@ -1,0 +1,3 @@
+INFO [2020-10-10 15:51:20] Start of parallel_observed.R. Computing relevant covariates for all observed passes in 
+          the input tracking data.
+INFO [2020-10-10 15:52:02] Setup complete for general purpose variables. Defining cluster now.
