@@ -49,8 +49,8 @@ exempt_plays <- tibble(game_id = c(2017091700,2017091706, 2017091711, 2017092407
                        play_id = c(2288, 2126, 3386, 190, 270, 1702))
 flog.info('Setup complete for general purpose variables. Defining cluster now.', name = 'par_obs')
 
-num_cores <- parallel::detectCores()
-plan(multisession)
+num_cores <- parallel::detectCores() - 2
+plan(multisession, workers = num_cores)
 
 flog.info('Cluster prepared, running loop.', name = 'par_obs')
 
@@ -64,6 +64,7 @@ for(i in 1:iter){
   flog.info('Loop %s started at %s.', i, format(Sys.time(), '%X'), name = 'par_obs') # Fix
   lower <- (i-1) * 10 + 1
   upper <- i * 10
+  upper <- min(upper, n_games)
   
   tracking <- read_many_tracking_data("/Data/", lower:upper) %>%
     group_by(game_id, play_id) %>%
@@ -73,16 +74,29 @@ for(i in 1:iter){
   # Need possession team for current format
   possession <- get_possession_team(tracking)
   
-  tracking <- tracking %>%
+  # here
+  tracking_nest <- tracking %>%
     left_join(possession) %>%
     nest(-game_id, -play_id) %>%
     inner_join(play_ids) %>%
-    mutate(data = future_pmap(list(data, game_id, play_id), ~quick_nest_fix(..1, ..2, ..3)),
-           data = map(data, ~standardize_play(., reorient)),
-           cleaning = map_dbl(data, ~handle_no_ball(.))) %>%
+    mutate(data = pmap(list(data, game_id, play_id), ~quick_nest_fix(..1, ..2, ..3)))
+  
+  # Remove plays with no snap recorded
+  tracking_rm_no_snaps <- tracking_nest %>%
+    mutate(snapped = map_lgl(data, is_snap)) %>%
+    filter(snapped) %>%
+    select(-snapped)
+  
+  # tracking_nest %>%
+  #   filter(game_id == "2017091011", play_id == "2782") %>%
+  #   select(data) %>% unnest(data) %>% View()
+  
+  tracking_standard <- tracking_rm_no_snaps %>%
+           mutate(data = map(data, ~standardize_play(., reorient)),
+                  cleaning = map_dbl(data, ~handle_no_ball(.))) %>%
     filter(!is.na(cleaning), pass_result %in% c('C', 'I', 'IN')) 
   
-  tracking <- tracking %>%
+  tracking_filter <- tracking_standard %>%
     mutate(data = map(data, ball_fix_2),
            target = map_dbl(data, intended_receiver),
            complete = map_lgl(data, play_success),
@@ -94,19 +108,19 @@ for(i in 1:iter){
     mutate(receiver = display_name) %>%
     select(-display_name)
   
-  tracking <- tracking %>%
+  tracking_exempt <- tracking_filter %>%
     anti_join(exempt_plays) %>%
     filter(!(game_id == 2017092407))
   
   # All the parallel stuff
-  parallel_res <- tracking %>%
+  parallel_res <- tracking_exempt %>%
     ungroup() %>% 
     mutate(air_dist = map2_dbl(data, target, ~air_distance(.x, .y)),
            separation = map2(data, target, ~separation(.x, .y)),
            sideline_sep = map2_dbl(data, target, ~sideline_sep(.x, .y)),
            passrush_sep = map(data, ~pass_rush_sep(.))) 
   
-  parallel_res <- parallel_res %>%
+  parallel_res_scalar <- parallel_res %>%
     mutate(qb_vel = map_dbl(data, ~qb_speed(.)),
            first_elig = map_dbl(data, ~first_elig_frame(.)),
            last_elig = map_dbl(data, ~last_elig_frame(.))) %>%
@@ -114,10 +128,10 @@ for(i in 1:iter){
            dist_from_pocket = map_dbl(data, ~pocket(.)),
            qb_disp_name = map_chr(data, ~qb_name(.)))
   
-  parallel_res <- parallel_res %>%
+  parallel_res_inf <- parallel_res_scalar %>%
     mutate(inf_at_pass = future_map(data, ~ add_influence(.)))
   
-  parallel_res <- parallel_res %>%
+  parallel_res_unnest <- parallel_res_inf %>%
     mutate(ball_speed_arrival = map_dbl(data, ~ball_speed_at_arrival(.)),
            air_time_ball = map_dbl(data, ~air_time(.)),
            air_yards_x = map_dbl(data, ~air_yards(.))) %>%
@@ -129,9 +143,10 @@ for(i in 1:iter){
   flog.info('Loop %s ended at %s.', i, format(Sys.time(), '%X'), name = 'par_obs')
   flog.info('Writing file observed_covariates_%s_%s.rds', lower, upper, name= 'par_obs')
   
-  parallel_res %>% write_rds(paste0('observed_covariates',lower, "_", upper, '.rds'))
+  parallel_res_unnest %>% write_rds(paste0('observed_covariates',lower, "_", upper, '.rds'))
   
-  rm(parallel_res)
+  rm(parallel_res, parallel_res_scalar,
+     parallel_res_inf, parallel_res_unnest)
   gc(verbose = FALSE)
 }
 

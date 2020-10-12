@@ -596,10 +596,23 @@ make_gif <- function(example_play, handoff_frame, n_frames, inf_or_grad = 'inf')
   animate(inf_plot, fps = 10, nframe = play_length_ex)
 }
 
+is_snap <- function(pass_play){
+  # Check for plays without snaps
+  n_snap <- sum(pass_play$event %in% c("ball_snap", "snap_direct"), na.rm=TRUE)
+  
+  return(n_snap > 0)
+}
+
 # Include summer work standardization for future modeling
 standardize_play <- function(pass_play, reorient = FALSE){
   
   data <- pass_play
+  
+  params <- pass_play %>%
+    ungroup() %>%
+    slice(1)
+  
+  print(glue::glue("Game ID: {params$game_id}, Play ID: {params$play_id}"))
   
   line_of_scrimmage <-
     data %>% 
@@ -1694,4 +1707,15 @@ qb_tuck <- function(sack_or_run){
     pull(nfl_id)
   
   return(qb_id)
+}
+
+get_possession_team <- function(one_or_more_plays){
+  
+  poss_team <- one_or_more_plays %>%
+    group_by(game_id, play_id) %>%
+    filter(position %in% c("QB","RB")) %>%
+    slice(1) %>%
+    select(game_id, play_id, poss_team = team)
+  
+  return(poss_team)
 }

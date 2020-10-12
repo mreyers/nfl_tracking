@@ -21,7 +21,8 @@ flog.info('Welcome to QB Decision Making with Tracking Data!
 
 flog.info('Loading packages. A few gotchas might exist for 4.0.x users
           with future, furrr, dtwclust, and glmnet. Be sure to reinstall
-          codetools, survival, class, and cluster. If problem persists,
+          codetools, survival, class, stringi, and cluster.
+          If problem persists,
           probably more missing dependencies.', name = 'main')
 
 # Task 0: Package management
@@ -29,7 +30,7 @@ flog.info('Loading packages. A few gotchas might exist for 4.0.x users
 pacman::p_load(gganimate, cowplot, gifski, bezier, magrittr, 
                funHDDC,  broom, ggridges, mvtnorm, scales,
                data.table, snakecase, tictoc, glue,
-               tidyverse, nflscrapR, future, furrr, dtwclust, glmnet)
+               tidyverse, future, furrr, dtwclust, glmnet)
 
 flog.info('Loading helper functions', name = 'main')
 flog.info('Some of these functions are still hardcoded to original dataset.
@@ -38,17 +39,21 @@ source('utils/tracking_helpers.R')
 
 flog.info('Beginning of the condensed QB evaluation. Running on the first 6 weeks of the 2017-2018 NFL
           season.', name = 'main')
+flog.info('Note that some of the inefficiencies in data loading, such as looping
+          and iterating, are a relic of 8GB of RAM. Whenever you build your PC
+          next, do me a favour and get more RAM than you think you need.',
+          name = 'main')
 
 # # # # # # # # # # # # # # # # # #
 # Task 1: Generate the covariates necessary to calculate probability of catching the ball
 # Load the games, players, and list of plays in the data set
 # This can all be done via the parallel_observed.R script. Data will be written, as desired
-source('parallel_observed.R') # Need to replace pocket distance calculation with pocket_fixed()
+source('scripts/parallel_observed.R') # Need to replace pocket distance calculation with pocket_fixed()
 flog.info('Completed parallel_observed.R. Onto building completion probability.', name = 'main')
 
 # # # # # # # # # # # # # # # # # #
 # Task 2: Use the covariates to calculate P(Catch) 
-source('build_completion_probability.R') # Still roughly 70% with corrections to covariate
+source('completion_probability.R') 
 flog.info('Completed build_completion_probability.R. Onto building frame by frame covariates.', name = 'main')
 
 # # # # # # # # # # # # # # # # # #
