@@ -57,7 +57,7 @@ new_features <-
                      size = n(), replace = TRUE, prob = c(0.85, 0.15))) %>%
   ungroup() %>%
   mutate(pass_result = if_else(pass_result %in% 'C', 'C', 'I'),
-         pass_result_f = as.factor(pass_result))
+         pass_result_f = factor(pass_result, levels = c("C", "I")))
 rm(ngs_features)
 
 # Partition data for training/testing
@@ -83,8 +83,8 @@ x_2 <- c(# NGS Features
   'air_dist', 'rec_separation', 'sideline_sep', 'no_frame_rush_sep', 
   'qb_vel', 'time_to_throw', 'dist_from_pocket', 
   # Ownership Features, only used 1 due to colinearity
-  #'n_cells_at_throw',
-  #'own_intensity_at_throw', 
+  'n_cells_at_throw',
+  'own_intensity_at_throw', 
   'own_avg_intensity_at_throw',
   # Additional features that differ slightly
   'air_yards_x',
@@ -311,6 +311,9 @@ flog.info('Model accuracy checks. Ideally ensemble is most accurate
           will just select the most accurate completion probability model
           as the working model for the given script run.', name = 'comp_prob')
 
+#holder <- lapply(models_list, accuracy_calc)
 lapply(models_list, accuracy_calc)
 
+
+# Consider doing in tidymodels instead
 best_model %>% saveRDS('completion_probability.rds')
