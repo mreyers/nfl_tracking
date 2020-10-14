@@ -44,6 +44,9 @@ flog.info('Note that some of the inefficiencies in data loading, such as looping
           next, do me a favour and get more RAM than you think you need.',
           name = 'main')
 
+# Consider some use cases for dbplyr, lots of data manip that would benefit
+# from a SQL-like framework
+
 # # # # # # # # # # # # # # # # # #
 # Task 1: Generate the covariates necessary to calculate probability of catching the ball
 # Load the games, players, and list of plays in the data set

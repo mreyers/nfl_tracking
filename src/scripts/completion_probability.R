@@ -226,6 +226,22 @@ gbm_4 <- h2o.gbm(x = x_2,
                  distribution = 'bernoulli',
                  seed = 1312020)
 
+gbm_5 <- h2o.gbm(x = x_2,
+                 y = y,
+                 training_frame = h2o_train,
+                 nfolds = 10,
+                 keep_cross_validation_predictions = TRUE,
+                 fold_assignment = 'Modulo',
+                 balance_classes = FALSE,
+                 max_after_balance_size = 5,
+                 max_hit_ratio_k = 0,
+                 ntrees = 1000,
+                 max_depth = 10,
+                 min_rows = 30,
+                 nbins = 30,
+                 distribution = 'bernoulli',
+                 seed = 1312020)
+
 # Neural net
 flog.info('Neural Net section. Included to make sure this qualifies for Sloan.',
           name = 'comp_prob')
@@ -287,7 +303,7 @@ general_ensemble <- h2o.stackedEnsemble(x = x_2,
                                           training_frame = h2o_train,
                                           base_models = list(rf_1, rf_2, rf_3, rf_4,
                                                              glm_2, glm_3,
-                                                             gbm_2, gbm_3, gbm_4,
+                                                             gbm_2, gbm_3, gbm_4, gbm_5,
                                                              nn_1, nn_2, nn_3,
                                                              nb_1),
                                           metalearner_algorithm = 'gbm',
