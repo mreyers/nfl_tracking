@@ -44,15 +44,21 @@ flog.info('Note that some of the inefficiencies in data loading, such as looping
           next, do me a favour and get more RAM than you think you need.',
           name = 'main')
 
-# Consider some use cases for dbplyr, lots of data manip that would benefit
-# from a SQL-like framework
+flog.info('Since BDB3 is a thing allow for an option to manipulate incoming data
+           to work with old tracking framework or new tracking framework. Also
+           allow for user to switch between at time of throw and at time of arrival.',
+           name = 'main')
+
+new_age_tracking_data <- TRUE
+time_of_arrival <- TRUE
 
 # # # # # # # # # # # # # # # # # #
 # Task 1: Generate the covariates necessary to calculate probability of catching the ball
 # Load the games, players, and list of plays in the data set
 # This can all be done via the parallel_observed.R script. Data will be written, as desired
-source('scripts/parallel_observed.R') # Need to replace pocket distance calculation with pocket_fixed()
+source('scripts/parallel_observed_new.R') # Need to replace pocket distance calculation with pocket_fixed()
 flog.info('Completed parallel_observed.R. Onto building completion probability.', name = 'main')
+# Still need to check for 2017 data but not urgent currently
 
 # # # # # # # # # # # # # # # # # #
 # Task 2: Use the covariates to calculate P(Catch) 

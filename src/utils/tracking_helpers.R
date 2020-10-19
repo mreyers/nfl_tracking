@@ -167,7 +167,13 @@ get_R_i_t = function(x){
 # Establish the zone influence on a frame by frame basis
 # This will need to be changed, no rusher interest anymore
 get_zone_influence <- function(data, standardized = FALSE, start_or_end = 'start',
-                               lazy = FALSE, run = FALSE){
+                               lazy = FALSE, run = FALSE, is_football = FALSE){
+  
+  # Change ball name dependent on data set
+  ball_name <- "ball"
+  if(is_football){
+    ball_name <- "football"
+  }
   
   if(standardized){
     # Has been standardized, rename 2 variables
@@ -224,7 +230,7 @@ get_zone_influence <- function(data, standardized = FALSE, start_or_end = 'start
   # Dont need qb location, need ball location instead
   ball_loc <- 
     throw_time_positions %>%
-    filter(team %in% "ball") %>%
+    filter(team %in% ball_name) %>%
     select(x, y)
   
   qb_loc <- 
@@ -1138,21 +1144,29 @@ qb_name <- function(pass_play){
 
 # g) My features now. Incorporate Openness in to the model. These results already exist
 # Be sure to use helper functions
-add_influence <- function(pass_play){
+add_influence <- function(pass_play, is_football = FALSE){
   
+  ball_name <- "ball"
+  
+  if(is_football){
+    ball_name <- "football"
+  }
   # Default is standardized = FALSE in zone inf but this data has been standardized
   # assuming that it comes from a ~standardize_play() call
   # Standardized changes only really make the plot look weird, this is an angle/velocity adj
-  this_inf <- get_zone_influence(pass_play, standardized = TRUE) %>%
+  this_inf <- get_zone_influence(pass_play, standardized = TRUE,
+                                 is_football = is_football) %>%
     mutate(x = round(s_1),
            y = round(s_2)) # sometimes get fractional values, need to correct
   
-  future_inf <- get_zone_influence(pass_play, standardized = TRUE, start_or_end = 'end') %>%
+  future_inf <- get_zone_influence(pass_play, standardized = TRUE,
+                                   start_or_end = 'end', is_football = is_football) %>%
     mutate(x = round(s_1),
            y = round(s_2))
   
   # Summarize into some variables
   # Amount of cells owned in a 5x5 circle around location ball will land
+  # This just gets the frame_id, doesnt actually calculate at that pt
   pass_arrival_frame <- pass_play %>%
     filter(event %in% c(pass_air_end, 'pass_arrived')) %>%
     ungroup() %>%
@@ -1161,7 +1175,7 @@ add_influence <- function(pass_play){
     pull(frame_id) # Just need one frame for an arrival event
   
   ball_at_arrival <- pass_play %>%
-    filter(frame_id == pass_arrival_frame, team %in% 'ball') %>%
+    filter(frame_id == pass_arrival_frame, team %in% ball_name) %>%
     ungroup() %>%
     slice(1) %>%
     mutate(x = if_else(x < 0, 0, x),
@@ -1186,6 +1200,7 @@ add_influence <- function(pass_play){
       future_inf <- future_inf %>% mutate(off_inf = away_inf)
     }
     
+    # At time of throw
     pass_time_results <- this_inf %>%
       ungroup() %>%
       mutate(dist_from_ball = sqrt((x - ball_at_arrival$x)^2 + (y - ball_at_arrival$y)^2)) %>%
@@ -1200,6 +1215,7 @@ add_influence <- function(pass_play){
       print('Failing for some reason')
     }
     
+    # At time of arrival
     pass_arrival_results <- future_inf %>%
       ungroup() %>%
       mutate(dist_from_ball = sqrt((x - ball_at_arrival$x)^2 + (y - ball_at_arrival$y)^2)) %>%
@@ -1217,7 +1233,12 @@ add_influence <- function(pass_play){
 
 
 # h) velocity of ball at pass_arrival
-ball_speed_at_arrival <- function(pass_play){
+ball_speed_at_arrival <- function(pass_play, is_football = FALSE){
+  
+  football_name <- "ball"
+  if(is_football){
+    football_name <- "football"
+  }
   
   pass_arrival_frame <- pass_play %>%
     filter(event %in% c(pass_air_end, 'pass_arrived')) %>%
@@ -1227,7 +1248,7 @@ ball_speed_at_arrival <- function(pass_play){
     pull(frame_id) # Just need one frame for an arrival event
   
   ball_at_arrival <- pass_play %>%
-    filter(frame_id == pass_arrival_frame, team %in% 'ball') %>%
+    filter(frame_id == pass_arrival_frame, team %in% football_name) %>%
     ungroup() %>%
     slice(1) %>%
     pull(velocity)
@@ -1257,7 +1278,14 @@ air_time <- function(pass_play){
 
 # Previously used y but field length is measured by x, clearly meant to use that variable
 # j) Air yards (just the x component)
-air_yards <- function(pass_play){
+air_yards <- function(pass_play, is_football = FALSE){
+  
+  # Check for new football naming
+  football_name <- "ball"
+  if(is_football){
+    football_name <- "football"
+  }
+  
   throw_frame <- pass_play %>%
     ungroup() %>%
     filter(event %in% pass_air_start) %>%
@@ -1271,7 +1299,7 @@ air_yards <- function(pass_play){
     pull(frame_id)
   
   ball_position <- pass_play %>%
-    filter(team %in% 'ball', frame_id %in% c(throw_frame, arrival_frame)) %>%
+    filter(team %in% football_name, frame_id %in% c(throw_frame, arrival_frame)) %>%
     summarize(dist = abs(first(x) - last(x))) %>%
     pull(dist)
   
@@ -1280,7 +1308,7 @@ air_yards <- function(pass_play){
 
 # Other ancilliary functions
 # This is breaking for something in game # 23
-intended_receiver <- function(pass_play){
+intended_receiver <- function(pass_play, is_football = FALSE){
   # Using pass_over events, identify player closest to the ball on offense, label intended receiver
   
   pass_play <- pass_play %>% ungroup() 
@@ -1316,9 +1344,18 @@ intended_receiver <- function(pass_play){
   }
   
   # Grab ball location, may need to investigate data integrity on this one
-  ball_loc <- pass_play %>%
-    filter(team %in% "ball", frame_id == arrival_frame) %>%
-    select(x, y)
+  if(!is_football){
+    # Again old tracking data calls it ball
+    ball_loc <- pass_play %>%
+      filter(team %in% "ball", frame_id == arrival_frame) %>%
+      select(x, y)
+  } else{
+    # New tracking data calls it football
+    ball_loc <- pass_play %>%
+      filter(team %in% "football", frame_id == arrival_frame) %>%
+      select(x, y)
+  }
+  
   
   if(length(ball_loc$x) == 0){
     # Ball isnt measured at time of arrival for some reason, remove these plays
@@ -1333,6 +1370,9 @@ intended_receiver <- function(pass_play){
     slice(1) %>%
     pull(nfl_id)
   
+  if(length(receiver) == 0){
+    return(NA_real_)
+  }
   return(receiver)
 }
 
@@ -1488,12 +1528,23 @@ quick_nest_fix <- function(data, game_id, play_id){
 }
 
 # Some of the observations have no ball data, remove these
-handle_no_ball <- function(data){
-  if(!any(data$team %in% 'ball')){
-    return(NA_real_)
+handle_no_ball <- function(data, is_football = FALSE){
+  if(!is_football){
+    # Old tracking data calls the football "ball"
+    if(!any(data$team %in% 'ball')){
+      return(NA_real_)
+    } else{
+      return(1)
+    }
   } else{
-    return(1)
+    # New tracking data calls the football "football"
+    if(!any(data$team %in% 'football')){
+      return(NA_real_)
+    } else{
+      return(1)
+    }
   }
+  
 }
 
 pass_start_event <- function(data){
@@ -1664,7 +1715,8 @@ first_elig_frame <- function(pass_play){
     arrange(desc(n_ball_snap)) %>%
     slice(1) %>%
     ungroup() %>%
-    mutate(frame_id = if_else(n_ball_snap > 1, frame_id, 15L)) %>% # Change to arbitrary frame if we have a ball snap problem
+    mutate(frame_id = if_else(n_ball_snap > 1,
+                              as.integer(frame_id), 15L)) %>% # Change to arbitrary frame if we have a ball snap problem
     pull(frame_id)
   
   return(frame)
@@ -1685,7 +1737,8 @@ last_elig_frame <- function(pass_play, pass_type = 'C'){
     arrange(desc(n_ball_released)) %>%
     slice(1) %>%
     ungroup() %>%
-    mutate(frame_id = if_else(n_ball_released > 1, frame_id, 30L)) %>% # Change to arbitrary frame if we have a ball snap problem
+    mutate(frame_id = if_else(n_ball_released > 1,
+                              as.integer(frame_id), 30L)) %>% # Change to arbitrary frame if we have a ball snap problem
     pull(frame_id)
   
   # Check if 10 frames after is available
