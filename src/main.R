@@ -32,6 +32,12 @@ pacman::p_load(gganimate, cowplot, gifski, bezier, magrittr,
                data.table, snakecase, tictoc, glue,
                tidyverse, future, furrr, dtwclust, glmnet)
 
+library(tidymodels)
+remotes::install_github("tidymodels/discrim")
+remotes::install_github("tidymodels/stacks", ref = "main")
+library(stacks)
+library(discrim)
+
 flog.info('Loading helper functions', name = 'main')
 flog.info('Some of these functions are still hardcoded to original dataset.
            General updates are in progress for robustness.', name = 'main')

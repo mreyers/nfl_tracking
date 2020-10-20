@@ -1,20 +1,9 @@
 # Can I do completion_probability via tidymodels?
 # Load in parallel_observed.R results
 # Be sure to run all the functions from the QB_evaluation file first
-n_games <- dim(games)[1]
-iter <- ceiling(n_games / 10)
 
-ngs_features <- tibble()
-for(i in 1:iter){
-  lower <- (i-1) * 10 + 1
-  upper <- i * 10
-  upper <- min(upper, n_games)
-  
-  temp <- readRDS(paste0('observed_covariates', lower, '_', upper, '.rds'))
-  
-  ngs_features <- ngs_features %>%
-    bind_rows(temp)
-}
+ngs_features <- readRDS(paste0(default_path, "observed_covariates.rds"))
+
 
 flog.info('Data loaded', name = 'comp_prob')
 
@@ -23,14 +12,17 @@ flog.info('Loading in standard nflscrapR data. Have updated to nflfastR
           that a user only wants 2017 data. Come change the range
           of season to get more data.', name = 'comp_prob')
 
-seasons <- 2017:2017
-nfl_pbp <- purrr::map_df(seasons, function(x) {
-  readr::read_csv(
-    glue::glue("https://raw.githubusercontent.com/guga31bb/nflfastR-data/master/data/play_by_play_{x}.csv.gz")
-  )
-}) %>%
-  dplyr::select(game_id = old_game_id,
-                play_id, yardline_100, down, ydstogo)
+seasons <- 2018
+nfl_pbp <- plays %>%
+  mutate(yardline_100 = if_else(is.na(absolute_yardline_number),
+                                yardline_number + 
+                                  (50 - yardline_number) * as.numeric(yardline_side != possession_team),
+                                # For non-missing, just need to reduce by 10
+                                absolute_yardline_number - 10),
+         # Just in case
+         yardline_100 = if_else(is.na(yardline_100), 50, yardline_100)) %>%
+  dplyr::select(game_id,
+                play_id, yardline_100, down, ydstogo = yards_to_go)
 
 flog.info('Set up really simple data splitting. Can obviously
           be improved, may be later. Who knows.', name = 'comp_prob')
@@ -43,7 +35,6 @@ new_features <-
          pass_result_f = factor(pass_result, levels = c("C", "I")))
 rm(ngs_features)
 
-library(tidymodels)
 
 # There should be additional preprocessing steps that are useful via recipes
 # General approach:
@@ -52,7 +43,7 @@ library(tidymodels)
   # Bake this recipe into a model and workflow
   # Split data into train and test
   # Train the stacked ensemble through grid tuning on base models
-specific_vars <- new_features %>%
+specific_vars_at_release <- new_features %>%
   ungroup() %>%
   select(pass_result_f, air_dist, rec_separation,
          sideline_sep, no_frame_rush_sep, 
@@ -64,7 +55,28 @@ specific_vars <- new_features %>%
          # Context Features
          yardline_100, down, ydstogo)
 
-splits <- initial_split(specific_vars, 0.85, strata = pass_result_f)
+# Probably could improve further by adding separations at arrival
+# I believe these separations are currently at release
+specific_vars_at_arrival <- new_features %>%
+  ungroup() %>%
+  select(pass_result_f, air_dist, rec_separation,
+         sideline_sep, no_frame_rush_sep, 
+         qb_vel, time_to_throw, dist_from_pocket, 
+         # Ownership Features, only used 1 due to colinearity
+         n_cells_at_arrival, own_intensity_at_arrival, own_avg_intensity_at_arrival,
+         # Additional features that differ slightly
+         air_yards_x,
+         # Context Features
+         yardline_100, down, ydstogo)
+
+# Using 75/25 split instead of 85/15 as in paper
+type <- "release" # "release" / "arrival"
+if(type == "arrival"){
+  splits <- initial_split(specific_vars_at_arrival, 0.75, strata = pass_result_f)
+} else{
+  splits <- initial_split(specific_vars_at_release, 0.75, strata = pass_result_f)
+}
+
 
 train_ngs <- training(splits)
 test_ngs <- testing(splits)
@@ -82,8 +94,9 @@ comp_prob_wflow <- workflow() %>%
 
 # Need to define basic model architectures with which I will be tuning
 # Since goal is ensemble, need same CV splits & control grid
+# stacks should be loaded from main.R
 set.seed(1312020)
-ctrl_grid <- control_stack_grid()
+ctrl_grid <- stacks::control_stack_grid()
 folds <- rsample::vfold_cv(train_ngs, v = 10)
 
 # From paper that is
@@ -106,6 +119,7 @@ nnet_wflow <- comp_prob_wflow %>%
   update_recipe(nnet_rec) %>%
   add_model(nnet_mod)
 
+# If nnet all fail its likely because of NA in train set
 nnet_res <- tune_grid(object = nnet_wflow,
                       resamples = folds,
                       grid = 10,
@@ -151,8 +165,6 @@ glm_res <- tune_grid(object = glm_wflow,
                      control = ctrl_grid)
 
 # Naive Bayes: Requires download of discrim extension
-# Return to this after reboot
-remotes::install_github("tidymodels/discrim")
 nb_mod <- discrim::naive_Bayes(smoothness = tune()) %>%
   set_engine("klaR")
 
@@ -163,10 +175,6 @@ nb_tune <- tune_grid(object = nb_wflow,
                      resamples = folds,
                      grid = 10,
                      control = ctrl_grid)
-
-# To run stacking, need stacks
-# remotes::install_github("tidymodels/stacks", ref = "main")
-library(stacks)
 
 # Build the stacks the same way I would build a workflow
 comp_prob_stack <- stacks() %>%
@@ -183,12 +191,15 @@ comp_prob_stack <- stacks() %>%
 # Show prediction weight distribution
 comp_prob_stack
 
+# Save the model
+saveRDS(comp_prob_stack, glue("Data_new/{type}/comp_prob.rds"))
+
 # Gut check
 theme_set(theme_bw())
 autoplot(comp_prob_stack)
 
 # Actual test set predictions
-comp_prob_test <- ngs_test %>%
+comp_prob_test <- test_ngs %>%
   bind_cols(predict(comp_prob_stack, ., type = "prob"))
 
 # roc_auc = 0.763
@@ -197,9 +208,9 @@ roc_auc(comp_prob_test,
         contains(".pred_C"))
 
 # Comparison of ensemble to the individual learners
-comp_prob_all_test <- ngs_test %>%
+comp_prob_all_test <- test_ngs %>%
   select(pass_result_f) %>%
-  bind_cols(predict(comp_prob_stack, ngs_test, 
+  bind_cols(predict(comp_prob_stack, test_ngs, 
                     type = "class", members = TRUE))
 
 comp_prob_all_test
