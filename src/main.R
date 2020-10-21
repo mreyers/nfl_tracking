@@ -68,12 +68,13 @@ flog.info('Completed parallel_observed.R. Onto building completion probability.'
 
 # # # # # # # # # # # # # # # # # #
 # Task 2: Use the covariates to calculate P(Catch) 
-source('completion_probability.R') 
-flog.info('Completed build_completion_probability.R. Onto building frame by frame covariates.', name = 'main')
+source('scripts/tidy_completion_probability.R') 
+flog.info('Completed tidy_build_completion_probability.R
+           Onto building frame by frame covariates.', name = 'main')
 
 # # # # # # # # # # # # # # # # # #
 # Task 3: Generate frame by frame covariates necessary to apply the model
-source('All_time_points_decisions.R') 
+source('utils/all_time_points_decisions.R') 
 source('additional_all_time_points_fns.R') 
 source('sacks_and_runs.R') # Deal with the covariates for plays that are sacks or runs
 source('prob_incomplete.R') 
