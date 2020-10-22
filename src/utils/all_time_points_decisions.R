@@ -20,13 +20,14 @@ flog.info('Start of all_time_points_decisions.R. Computing relevant covariates f
 # Each function will need subfunctions I imagine
 # Work on structure later
 
+# Looks good for new data
 # Receiver separation from nearest defender
 all_separation <- function(one_frame, run=FALSE){
   # Receiver separation
   
-  position_group <- c('WR', 'TE', 'RB')
+  position_group <- c('WR', 'TE', 'RB', 'FB', 'HB')
   if(run){
-    position_group <- c('WR', 'TE', 'RB', 'QB')
+    position_group <- c('WR', 'TE', 'RB', 'QB', 'FB', 'HB')
   }
   
   receivers_df <- one_frame %>%
@@ -57,12 +58,13 @@ all_separation <- function(one_frame, run=FALSE){
 
 # Add with left_join
 
+# Looks good for new data
 # Receiver separation from nearest sideline
 all_sideline_sep <- function(one_frame, run=FALSE){
   
-  position_group <- c('WR', 'TE', 'RB')
+  position_group <- c('WR', 'TE', 'RB', 'HB', 'FB')
   if(run){
-    position_group <- c('WR', 'TE', 'RB', 'QB')
+    position_group <- c('WR', 'TE', 'RB', 'QB', 'HB', 'FB')
   }
   
   sideline_df <- one_frame %>%
@@ -79,38 +81,48 @@ all_sideline_sep <- function(one_frame, run=FALSE){
 
 # Add with left_join
 
+# Unnecessary, return NA just for ease of use
 # No frame rush separation
 pass_rush_sep <- function(one_frame){
   
-  # Get distance from nearest defender and the qb at time of throw
-  qb_loc <- one_frame %>%
-    filter(position %in% "QB") %>%
-    dplyr::select(x, y, frame_id)
+  # # Get distance from nearest defender and the qb at time of throw
+  # qb_loc <- one_frame %>%
+  #   filter(position %in% "QB") %>%
+  #   dplyr::select(x, y, frame_id)
+  # 
+  # def_dist <- one_frame %>%
+  #   filter(!(team %in% poss_team), team %in% c("home", "away")) %>%
+  #   mutate(dist = sqrt((x - qb_loc$x)^2 + (y - qb_loc$y)^2)) %>%
+  #   ungroup() %>%
+  #   arrange(dist) %>%
+  #   slice(1) %>%
+  #   pull(dist)
   
-  def_dist <- one_frame %>%
-    filter(!(team %in% poss_team), team %in% c("home", "away")) %>%
-    mutate(dist = sqrt((x - qb_loc$x)^2 + (y - qb_loc$y)^2)) %>%
-    ungroup() %>%
-    arrange(dist) %>%
-    slice(1) %>%
-    pull(dist)
+  def_dist <- NA_real_
   
   return(def_dist)
 }
 
 # Add with mutate
 
+# Looks good for new approach
 # QB speed at frame
 avg_qb_speed <- function(one_frame){
-  qb_speed <- one_frame %>% 
-    filter(position %in% 'QB') %>%
-    pull(velocity)
   
-  return(qb_speed)
+  qb_speed <- one_frame %>% 
+    filter(position %in% 'QB')
+  
+  if(!("velocity" %in% names(one_frame))){
+    return(qb_speed %>% pull(s))
+  }
+  
+  return(qb_speed %>% pull(velocity))
+  
 }
 
 # Add with mutate
 
+# This should be fine for new data assuming first_elig works
 # Time since ball snap
 time_calc <- function(one_frame, first_elig_frame_res){
   time_from_snap <- one_frame %>%
@@ -126,6 +138,7 @@ time_calc <- function(one_frame, first_elig_frame_res){
 # Distance from the pocket (TO BE REPLACED BY POCKET_FIXED)
 # Replaced by pocket() which calls pocket_fixed(), defined in thesis_helpers
 
+# Switch last_elig to be the pass_outcome event frame <- this has been done
 # So that is all the simple covariates, time to make a small omnibus function that adds them to all frames
 simple_covariates <- function(pass_play, first_elig, last_elig, run = FALSE){
   # Lets see how far I have come: no for loops
@@ -154,7 +167,9 @@ simple_covariates <- function(pass_play, first_elig, last_elig, run = FALSE){
 # Continue this approach
 
 # Okay good, now the actual functions
-ownership_at_throw <- function(one_frame, influence, ball_speed = 20, run = FALSE){
+ownership_at_throw <- function(one_frame, influence,
+                               ball_speed = 20, run = FALSE,
+                               ball_coords = NA){
   # Ball speed is set at 20 yards per second as an exploratory measure, used as argument to be tailored
   
   # QB position for my calculations
@@ -162,9 +177,9 @@ ownership_at_throw <- function(one_frame, influence, ball_speed = 20, run = FALS
     filter(position %in% 'QB') %>%
     slice(1)
   
-  position_group <- c('WR', 'TE', 'RB')
+  position_group <- c('WR', 'TE', 'RB', 'HB', 'FB')
   if(run){
-    position_group <- c('WR', 'TE', 'RB', 'QB')
+    position_group <- c('WR', 'TE', 'RB', 'QB', 'HB', 'FB')
   }
   # Receiver locations and anticipated locations
   receiver_loc <- one_frame %>%
@@ -209,28 +224,43 @@ ownership_at_throw <- function(one_frame, influence, ball_speed = 20, run = FALS
     return(pass_time_results)
   }
   
+  
   receiver_ownership_proj <- receiver_loc %>%
-    mutate(metrics = map2(arrival_x, arrival_y, ~sub_fn(one_frame, .x, .y, influence))) %>%
+    mutate(player_centric = map2(arrival_x, arrival_y, ~sub_fn(one_frame, .x, .y, influence)),
+           ball_centric= sub_fn(one_frame, ball_loc$x, ball_loc$y, influence)) %>%
     dplyr::select(nfl_id, display_name, air_time_ball = time_to_arrival, air_yards_x, air_dist, metrics) %>%
-    unnest(cols = c(metrics))
+    unnest(cols = c(player_centric, ball_centric), names_sep = "_")
   
   return(receiver_ownership_proj)
 }
 
+pass_arrive_location <- function(pass_play){
+  ball_coords <- pass_play %>%
+    arrange(desc(frame_id)) %>%
+    filter(team %in% "football") %>%
+    slice(1) %>%
+    select(x, y)
+  
+  return(ball_coords)
+}
 
 # So my 2 main functions rely on different levels of nesting
 # The simple covariates are done at a play level while the ownership covariates are done framewise
 # Try to write a wrapper for the ownership covariates that allows for play level summary
 
+# I think I want to keep frame_inf and ownership_metrics
 ownership_metric_wrapper <- function(pass_play, first_elig, last_elig){
   
   pass_play <- pass_play %>%
     filter(dplyr::between(frame_id, first_elig, last_elig)) %>%
     mutate(frame_id_2 = frame_id) %>% # quick fix to deal with nesting, dont want to lose covariate
     nest(-frame_id_2) %>%
-    mutate(frame_inf = map(data, ~get_zone_influence(., lazy = TRUE)),
-           ownership_metrics = map2(data, frame_inf, ~ownership_at_throw(.x, .y, # run to get QB covariates
-                                                                         ball_speed = 20, run =TRUE))) %>%
+    mutate(ball_at_arrival_coords = map(data, pass_arrive_location),
+           frame_inf = map(data, ~get_zone_influence(., lazy = TRUE)),
+           ownership_metrics = pmap(list(data, frame_inf, ball_at_arrival_coords),
+                                    ~ownership_at_throw(..1, ..2, 
+                                                        ball_speed = 20, run =TRUE,
+                                                        ball_coords = ..3))) %>%
     dplyr::select(-data, -frame_inf)
   
   return(pass_play)
@@ -287,28 +317,7 @@ joiner_fn <- function(basic_cov, complex_cov){
 ###########################################################
 ###########################################################
 num_cores <- parallel::detectCores() - 2
-cluster <- new_cluster(num_cores)
-
-cluster %>%
-  cluster_library('tidyverse') %>%
-  cluster_library('mvtnorm') %>%
-  cluster_library('scales') %>%
-  cluster_copy('first_elig_frame') %>%
-  cluster_copy('last_elig_frame') %>%
-  cluster_copy('simple_covariates') %>%
-  cluster_copy('ownership_metric_wrapper') %>%
-  cluster_copy('joiner_fn') %>% 
-  cluster_copy('all_separation') %>%
-  cluster_copy('all_sideline_sep') %>%
-  cluster_copy('pass_rush_sep') %>%
-  cluster_copy('avg_qb_speed') %>%
-  cluster_copy('time_calc') %>%
-  cluster_copy('pocket') %>%
-  cluster_copy('ownership_at_throw') %>%
-  cluster_copy('get_zone_influence') %>%
-  cluster_copy('pass_air_start') %>%
-  cluster_copy('pass_air_end') %>% 
-  cluster_copy('pocket_fixed')
+plan(sequential) # To be parallelized later, this is for debugging
 
 flog.info('Parallel component established. Now to run.', name = 'all_time')
 
@@ -319,21 +328,17 @@ flog.info('Parallel component established. Now to run.', name = 'all_time')
 # Below is the necessary filtering from earlier
 
 # Lets try to incorporate 3 additional frames, i.e epsilon = 5
-epsilon <- 5
-cluster %>% cluster_copy('epsilon')
+epsilon <- 0
 
-for(i in 1:9){
-  flog.info('Started iteration %s at time %s.', i, format(Sys.time(), '%X'), name = 'all_time')
-  lower <- (i-1) * 10 + 1
-  upper <- i * 10
-  if(i == 9){
-    upper <- upper + 1 # have 91 files
-  }
+for(i in 1:1){
+  file_name <- file_list[i]
   
-  tracking <- read_many_tracking_data("/Data/", lower:upper) %>% 
-    group_by(game_id, play_id) %>%
-    join_additional_data("/Data/", players = TRUE) %>%
-    ungroup()
+  tracking <- read_csv(paste0(default_path, file_name)) %>%
+    select_at(select_cols) %>%
+    janitor::clean_names() %>%
+    left_join(players %>% select(-display_name), by = "nfl_id") %>%
+    rename(velocity = s)
+  
   
   # Need possession team for current format
   possession <- get_possession_team(tracking)
@@ -341,9 +346,8 @@ for(i in 1:9){
   # Control whether offensive routes are standardized: False for visualization, True for work
   reorient <- FALSE
   
-  # 6960 plays before cleaning
-  # 6887 plays after cleaning, lost 73 plays (not bad)
-  tracking <- tracking %>%
+  # Do some basic cleaning to start
+  tracking_clean <- tracking %>%
     left_join(possession) %>%
     nest(-game_id, -play_id) %>%
     inner_join(play_ids) %>%
@@ -351,11 +355,12 @@ for(i in 1:9){
            data = map(data, ~standardize_play(., reorient)),
            cleaning = map_dbl(data, ~handle_no_ball(.))) %>%
     filter(!is.na(cleaning), pass_result %in% c('C', 'I', 'IN'))
+  rm(tracking)
   
-  
-  tracking <- tracking %>%
+  # Add additional filtering criteria
+  tracking_additional <- tracking_clean %>%
     mutate(data = map(data, ball_fix_2),
-           target = map_dbl(data, intended_receiver),
+           target = map_dbl(data, intended_receiver, is_football = new_age_tracking_data),
            complete = map_lgl(data, play_success),
            fake_pt = map_dbl(data, fake_punt),
            qb_check = map_dbl(data, no_qb),
@@ -364,16 +369,10 @@ for(i in 1:9){
     filter(!is.na(target), !is.na(fake_pt), !is.na(qb_check), pass_recorded) %>%
     mutate(receiver = display_name) %>%
     dplyr::select(-display_name)
-
+  #rm(tracking_clean)
   
-  # Looks like Brady's data might be messed up for 2017092407
-  tracking <- tracking %>%
-    anti_join(exempt_plays) %>%
-    filter(!(game_id == 2017092407))
-  
-  # Begin debugging here
-  parallel_res <- tracking %>%
-    partition(cluster) %>%
+  # Begin debugging here, this is going to be a train wreck
+  parallel_res <- tracking_additional %>%
     mutate(first_elig = map_int(data, ~first_elig_frame(.)),
            last_elig = map_int(data, ~last_elig_frame(.)) + epsilon,
            pocket_dist = pmap(list(data, first_elig, last_elig),
@@ -390,15 +389,14 @@ for(i in 1:9){
   
   parallel_res <- parallel_res %>%
            mutate(covariates = map2(basic_covariates, complex_covariates, ~ joiner_fn(.x, .y))) %>%
-    dplyr::select(-data, -basic_covariates, -complex_covariates) %>%
-    collect()
+    dplyr::select(-data, -basic_covariates, -complex_covariates)
   
   flog.info('Ended iteration %s at time %s.', i, format(Sys.time(), '%X'), name = 'all_time')
   flog.info('Writing to all_track_res_%s_%s.rds', lower, upper, name = 'all_time')
   
-  parallel_res %>%
-    unnest(covariates) %>%
-    write_rds(paste0('all_track_res_5add_frames', lower, "_", upper, '.rds'))
+  # parallel_res %>%
+  #   unnest(covariates) %>%
+  #   write_rds(paste0('all_track_res_5add_frames', lower, "_", upper, '.rds'))
 
   rm(parallel_res)
   gc(verbose=FALSE)

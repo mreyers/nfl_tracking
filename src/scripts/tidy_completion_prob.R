@@ -35,6 +35,8 @@ new_features <-
          pass_result_f = factor(pass_result, levels = c("C", "I")))
 rm(ngs_features)
 
+# For the new data, I should definitely remove rush separation as new data
+# has no lineman information
 
 # There should be additional preprocessing steps that are useful via recipes
 # General approach:

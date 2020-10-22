@@ -625,14 +625,14 @@ standardize_play <- function(pass_play, reorient = FALSE){
     filter(event %in% c("ball_snap", "snap_direct"), team %in% c("home", "away")) %>% 
     group_by(game_id, play_id, team) %>% 
     summarise(right_scrim = max(x, na.rm=TRUE), left_scrim = min(x, na.rm=TRUE),
-              poss_team = first(poss_team)) %>%
+              poss_team = first(poss_team), .groups = "drop") %>%
     filter(team == poss_team) %>%
     select(game_id, play_id, right_scrim, left_scrim)
   
   play_direction <- data %>%
     filter(event %in% c("ball_snap", "snap_direct")) %>%
     group_by(game_id, play_id, team) %>%
-    summarise(mean_team = mean(x, na.rm=TRUE)) %>%
+    summarise(mean_team = mean(x, na.rm=TRUE), .groups = "drop") %>%
     filter(team != "ball") %>%
     filter(mean_team == max(mean_team)) %>%
     dplyr::select(game_id, play_id, direction_left = team, -mean_team)
@@ -1412,7 +1412,7 @@ ball_fix <- function(pass_play){
   
   # Ball stuff
   ball <- pass_play %>%
-    filter(team %in% 'ball') %>%
+    filter(team %in% c('ball', 'football')) %>%
     mutate(delta_x = x - lag(x, default = 9999))
   
   # No Ball stuff
@@ -1466,7 +1466,7 @@ ball_fix <- function(pass_play){
       
       # only do it if the difference is big enough
       pass_play <- pass_play %>%
-        mutate(frame_id = case_when(team %in% 'ball' ~ frame_id - difference,
+        mutate(frame_id = case_when(team %in% c('ball', 'football') ~ frame_id - difference,
                                     TRUE ~ frame_id)) %>%
         dplyr::filter(frame_id >= 1)
     }
@@ -1491,7 +1491,7 @@ ball_fix_2 <- function(pass_play){
   
   start_frame_ball <- pass_play %>%
     ungroup() %>%
-    filter(team %in% c('ball')) %>%
+    filter(team %in% c('ball', 'football')) %>%
     filter(velocity > 0.85) %>%
     slice(1) %>%
     pull(frame_id)
@@ -1512,7 +1512,8 @@ ball_fix_2 <- function(pass_play){
       slice(1)
     
     pass_play <- pass_play %>%
-      mutate(frame_id = if_else(team %in% 'ball', frame_id - difference, frame_id)) %>%
+      mutate(frame_id = if_else(team %in% c('ball', 'football'),
+                                frame_id - difference, frame_id)) %>%
       filter(frame_id >0)
   }
   return(pass_play)
@@ -1531,7 +1532,7 @@ quick_nest_fix <- function(data, game_id, play_id){
 handle_no_ball <- function(data, is_football = FALSE){
   if(!is_football){
     # Old tracking data calls the football "ball"
-    if(!any(data$team %in% 'ball')){
+    if(!any(data$team %in% 'football')){
       return(NA_real_)
     } else{
       return(1)
@@ -1725,7 +1726,15 @@ first_elig_frame <- function(pass_play){
 last_elig_frame <- function(pass_play, pass_type = 'C'){
   # Set default to be 'C' for legacy code
   
-  last_event <- c('pass_forward', 'pass_shovel')
+  #last_event <- c('pass_forward', 'pass_shovel')
+  last_event <- c(# "pass_arrived",
+                  "pass_outcome_caught",
+                  "pass_outcome_incomplete",
+                  # "pass_tipped",
+                  "touchdown",
+                  "pass_outcome_interception",
+                  "pass_outcome_touchdown"
+                 )
   if(pass_type %in% c('S', 'R')){
     last_event <- c('run', 'tackle', 'first_contact', 'out_of_bounds',
                     'qb_sack', 'qb_strip_sack')
@@ -1771,4 +1780,59 @@ get_possession_team <- function(one_or_more_plays){
     select(game_id, play_id, poss_team = team)
   
   return(poss_team)
+}
+
+calc_nearest_d_per_frame <- function(pass_play){
+  
+  check <- pass_play %>%
+    pull(team) %>%
+    unique()
+  
+  if(!(all(c("home", "away") %in% check))){
+    print("At least one of Home or Away does not exist. Return NA")
+    return(NA)
+  }
+  pass_play_nest <- pass_play %>%
+    # Remove football and QB as they arent relevant to closest D match
+    filter(!(team %in% "football"),
+           !(position %in% "QB")) %>%
+    mutate(is_poss_team = if_else(team == poss_team, "off", "def")) %>%
+    nest(-c(is_poss_team, frame_id)) %>%
+    # Weird nest setup to allow each offence player to matchup all D
+    pivot_wider(names_from = is_poss_team, values_from = data) %>%
+    unnest(off, names_sep = "_") %>%
+    unnest(def, names_sep = "_") 
+  
+  pass_play_nest <- pass_play_nest %>%
+    mutate(dist_to_player = sqrt((off_x - def_x) ^ 2 + (off_y - def_y) ^ 2)) %>%
+    group_by( frame_id, off_nfl_id) %>%
+    arrange(dist_to_player) %>%
+    slice(1) %>%
+    ungroup() %>%
+    select(frame_id, nfl_id = off_nfl_id,
+           closest_defender_name = def_display_name,
+           closest_defender_id = def_nfl_id,
+           separation = dist_to_player)
+  
+  return(pass_play_nest)
+}
+
+# Receiver separation from nearest sideline
+all_sideline_sep <- function(one_frame, run=FALSE){
+  
+  position_group <- c('WR', 'TE', 'RB')
+  if(run){
+    position_group <- c('WR', 'TE', 'RB', 'QB')
+  }
+  
+  sideline_df <- one_frame %>%
+    filter(position %in% position_group) %>%
+    dplyr::select(nfl_id, display_name, x, y) %>%
+    rowwise() %>%
+    mutate(dist_top = y,
+           dist_bot = 53 - y,
+           sideline_sep = min(dist_top, dist_bot)) %>%
+    dplyr::select(nfl_id, display_name, sideline_sep)
+  
+  return(sideline_df)
 }
