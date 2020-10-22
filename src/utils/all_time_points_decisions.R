@@ -109,9 +109,14 @@ pass_rush_sep <- function(one_frame){
 # QB speed at frame
 avg_qb_speed <- function(one_frame){
   
+  # Damn you Sean Payton, we dont need Taysom Hill on the field with Brees
   qb_speed <- one_frame %>% 
-    filter(position %in% 'QB')
+    filter(position %in% 'QB') %>%
+    slice(1)
   
+  if(dim(qb_speed)[1] >= 2){
+    print(one_frame)
+  }
   if(!("velocity" %in% names(one_frame))){
     return(qb_speed %>% pull(s))
   }
@@ -256,8 +261,11 @@ ownership_metric_wrapper <- function(pass_play, first_elig, last_elig){
     mutate(frame_id_2 = frame_id) %>% # quick fix to deal with nesting, dont want to lose covariate
     nest(-frame_id_2) %>%
     mutate(ball_at_arrival_coords = map(data, pass_arrive_location),
-           frame_inf = map(data, ~get_zone_influence(., lazy = TRUE)),
-           ownership_metrics = pmap(list(data, frame_inf, ball_at_arrival_coords),
+           frame_inf = map(data, ~get_zone_influence(., lazy = TRUE)))
+  
+  View(pass_play %>% select(-data))
+  pass_play <- pass_play %>%
+    mutate(ownership_metrics = pmap(list(data, frame_inf, ball_at_arrival_coords),
                                     ~ownership_at_throw(..1, ..2, 
                                                         ball_speed = 20, run =TRUE,
                                                         ball_coords = ..3))) %>%
@@ -376,13 +384,17 @@ for(i in 1:1){
     mutate(first_elig = map_int(data, ~first_elig_frame(.)),
            last_elig = map_int(data, ~last_elig_frame(.)) + epsilon,
            pocket_dist = pmap(list(data, first_elig, last_elig),
-                             ~pocket_fixed(..1, ..2, ..3)),
-           basic_covariates = pmap(list(data, first_elig, last_elig),
+                             ~pocket_fixed(..1, ..2, ..3)))
+  
+  # Good through here
+  parallel_res <- parallel_res %>%
+    mutate(basic_covariates = pmap(list(data, first_elig, last_elig),
                                    ~ simple_covariates(..1, ..2, ..3, run = TRUE)),
            basic_covariates = map2(basic_covariates, pocket_dist,
                                    ~ .x %>% mutate(pocket_dist = list(.y)))) %>%
     dplyr::select(-pocket_dist) # remove from exterior, now mapped it back
  
+  # Lets see
   parallel_res <- parallel_res %>%
            mutate(complex_covariates = pmap(list(data, first_elig, last_elig),
                                      ~ ownership_metric_wrapper(..1, ..2, ..3)))

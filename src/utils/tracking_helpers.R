@@ -1712,7 +1712,8 @@ first_elig_frame <- function(pass_play){
   # Grab the frame id for the first data point I want to consider
   frame <- pass_play %>%
     group_by(frame_id) %>%
-    summarize(n_ball_snap = sum(event %in% c('ball_snap', 'direct_snap'), na.rm = TRUE)) %>%
+    summarize(n_ball_snap = sum(event %in% c('ball_snap', 'direct_snap'), na.rm = TRUE),
+              .groups = "drop") %>%
     arrange(desc(n_ball_snap)) %>%
     slice(1) %>%
     ungroup() %>%
@@ -1742,7 +1743,8 @@ last_elig_frame <- function(pass_play, pass_type = 'C'){
   
   frame <- pass_play %>%
     group_by(frame_id) %>%
-    summarize(n_ball_released = sum(event %in% last_event, na.rm = TRUE)) %>%
+    summarize(n_ball_released = sum(event %in% last_event, na.rm = TRUE),
+              .groups = "drop") %>%
     arrange(desc(n_ball_released)) %>%
     slice(1) %>%
     ungroup() %>%
