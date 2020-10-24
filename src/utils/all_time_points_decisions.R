@@ -229,11 +229,18 @@ ownership_at_throw <- function(one_frame, influence,
     return(pass_time_results)
   }
   
+  if(!is.na(ball_coords)){
+    ball_centric_output <- list(sub_fn(one_frame, ball_coords$x, ball_coords$y, influence))
+  } else{
+    ball_centric_output <- list(NA)
+  }
+  
   
   receiver_ownership_proj <- receiver_loc %>%
     mutate(player_centric = map2(arrival_x, arrival_y, ~sub_fn(one_frame, .x, .y, influence)),
-           ball_centric= sub_fn(one_frame, ball_loc$x, ball_loc$y, influence)) %>%
-    dplyr::select(nfl_id, display_name, air_time_ball = time_to_arrival, air_yards_x, air_dist, metrics) %>%
+           ball_centric= ball_centric_output) %>%
+    dplyr::select(nfl_id, display_name, air_time_ball = time_to_arrival,
+                  air_yards_x, air_dist, player_centric, ball_centric) %>%
     unnest(cols = c(player_centric, ball_centric), names_sep = "_")
   
   return(receiver_ownership_proj)
@@ -254,16 +261,18 @@ pass_arrive_location <- function(pass_play){
 # Try to write a wrapper for the ownership covariates that allows for play level summary
 
 # I think I want to keep frame_inf and ownership_metrics
-ownership_metric_wrapper <- function(pass_play, first_elig, last_elig){
+ownership_metric_wrapper <- function(pass_play, first_elig, last_elig, is_football = FALSE){
   
   pass_play <- pass_play %>%
     filter(dplyr::between(frame_id, first_elig, last_elig)) %>%
-    mutate(frame_id_2 = frame_id) %>% # quick fix to deal with nesting, dont want to lose covariate
+    mutate(frame_id_2 = frame_id)
+  
+  pass_play <- pass_play %>% # quick fix to deal with nesting, dont want to lose covariate
     nest(-frame_id_2) %>%
     mutate(ball_at_arrival_coords = map(data, pass_arrive_location),
-           frame_inf = map(data, ~get_zone_influence(., lazy = TRUE)))
+           frame_inf = map(data, ~get_zone_influence(., lazy = TRUE,
+                                                     is_football = is_football)))
   
-  View(pass_play %>% select(-data))
   pass_play <- pass_play %>%
     mutate(ownership_metrics = pmap(list(data, frame_inf, ball_at_arrival_coords),
                                     ~ownership_at_throw(..1, ..2, 
@@ -338,6 +347,9 @@ flog.info('Parallel component established. Now to run.', name = 'all_time')
 # Lets try to incorporate 3 additional frames, i.e epsilon = 5
 epsilon <- 0
 
+# Parallelize with future_map
+plan(multisession, workers = max(availableCores() - 2, 1))
+
 for(i in 1:1){
   file_name <- file_list[i]
   
@@ -377,7 +389,7 @@ for(i in 1:1){
     filter(!is.na(target), !is.na(fake_pt), !is.na(qb_check), pass_recorded) %>%
     mutate(receiver = display_name) %>%
     dplyr::select(-display_name)
-  #rm(tracking_clean)
+  rm(tracking_clean)
   
   # Begin debugging here, this is going to be a train wreck
   parallel_res <- tracking_additional %>%
@@ -385,6 +397,7 @@ for(i in 1:1){
            last_elig = map_int(data, ~last_elig_frame(.)) + epsilon,
            pocket_dist = pmap(list(data, first_elig, last_elig),
                              ~pocket_fixed(..1, ..2, ..3)))
+  rm(tracking_additional)
   
   # Good through here
   parallel_res <- parallel_res %>%
@@ -395,22 +408,23 @@ for(i in 1:1){
     dplyr::select(-pocket_dist) # remove from exterior, now mapped it back
  
   # Lets see
-  parallel_res <- parallel_res %>%
-           mutate(complex_covariates = pmap(list(data, first_elig, last_elig),
-                                     ~ ownership_metric_wrapper(..1, ..2, ..3)))
+  parallel_res_temp <- parallel_res %>%
+           mutate(complex_covariates = future_pmap(list(data, first_elig, last_elig),
+                                     ~ ownership_metric_wrapper(..1, ..2, ..3,
+                                                                is_football = new_age_tracking_data)))
   
-  parallel_res <- parallel_res %>%
+  parallel_res_temp <- parallel_res_temp %>%
            mutate(covariates = map2(basic_covariates, complex_covariates, ~ joiner_fn(.x, .y))) %>%
     dplyr::select(-data, -basic_covariates, -complex_covariates)
   
   flog.info('Ended iteration %s at time %s.', i, format(Sys.time(), '%X'), name = 'all_time')
-  flog.info('Writing to all_track_res_%s_%s.rds', lower, upper, name = 'all_time')
+  flog.info('Writing to all_frames_covariates_week%s.rds', i, name = 'all_time')
   
-  # parallel_res %>%
-  #   unnest(covariates) %>%
-  #   write_rds(paste0('all_track_res_5add_frames', lower, "_", upper, '.rds'))
+  parallel_res_temp %>%
+    unnest(covariates) %>%
+    write_rds(paste0(default_path, "all_frames_covariates_week", i, ".rds"))
 
-  rm(parallel_res)
+  rm(parallel_res, parallel_res_temp)
   gc(verbose=FALSE)
 }
 

@@ -281,9 +281,10 @@ get_zone_influence <- function(data, standardized = FALSE, start_or_end = 'start
     filter(team %in% c("away", "home")) %>%
     mutate(is_poss_team = ifelse(poss_team == team, 1, 0)) %>%
     group_by(is_poss_team) %>%
-    summarize(avg_pos = mean(x, na.rm = TRUE)) %>%
+    summarize(avg_pos = mean(x, na.rm = TRUE), .groups = "drop") %>%
     arrange(avg_pos) %>%
-    summarize(play_direction = ifelse(first(is_poss_team) == 1, 'right', 'left')) %>%
+    summarize(play_direction = ifelse(first(is_poss_team) == 1, 'right', 'left'),
+              .groups = "drop") %>%
     pull(play_direction)
   
   # Restrict field for efficiency
@@ -340,11 +341,12 @@ get_zone_influence <- function(data, standardized = FALSE, start_or_end = 'start
     ungroup() %>% 
     filter(value > 1.30e-10) %>%
     group_by(s_1, s_2, team) %>%
-    summarize(team_total = sum(value)) %>%
+    summarize(team_total = sum(value), .groups = "drop") %>%
     group_by(s_1, s_2) %>%
     arrange(s_1, s_2, team) %>%
     summarize(away_inf = 1 / (1 + exp(-(first(team_total) - last(team_total))/ sum(team_total) )), 
-              home_inf = 1 / (1 + exp(-(last(team_total) - first(team_total))/ sum(team_total) ))) 
+              home_inf = 1 / (1 + exp(-(last(team_total) - first(team_total))/ sum(team_total) )),
+              .groups = "drop") 
   
   return(influence)
 }
@@ -990,55 +992,59 @@ sideline_sep <- function(pass_play, target_rec){
 pass_rush_sep <- function(pass_play){
   # Get distance from nearest defender and the qb at time of throw
   # Possibly also grab the rate of change in that distance from 5 frames prior
-  qb_loc <- pass_play %>%
-    filter(position %in% "QB", event %in% pass_air_start) %>%
-    ungroup() %>%
-    slice(1) %>% # just in case
-    select(x, y, frame_id)
+  # qb_loc <- pass_play %>%
+  #   filter(position %in% "QB", event %in% pass_air_start) %>%
+  #   ungroup() %>%
+  #   slice(1) %>% # just in case
+  #   select(x, y, frame_id)
+  # 
+  # # Corner case for when a pass event is not recorded despite existing
+  # if(length(qb_loc$x) == 0){
+  #   # pass event wasnt recorded, approximate
+  #   if(pass_play$play_direction[1] %in% 'left'){
+  #     # new x < old x + 0.5 means pass
+  #     qb_loc <- pass_play %>%
+  #       mutate(x_change = lead(x) - x) %>%
+  #       filter(x_change > 0.5) %>% 
+  #       arrange(frame_id) %>% 
+  #       slice(1)
+  #   } else{
+  #     qb_loc <- pass_play %>%
+  #       mutate(x_change = lead(x) - x) %>%
+  #       filter(x_change < -0.5) %>% 
+  #       arrange(frame_id) %>% 
+  #       slice(1)
+  #   }
+  # }
+  # 
+  # qb_loc_5_frames <- pass_play %>%
+  #   filter(position %in% "QB", frame_id == (qb_loc$frame_id - 5)) %>%
+  #   ungroup() %>%
+  #   slice(1) %>%
+  #   select(x, y, frame_id)
+  # 
+  # def_loc <- pass_play %>%
+  #   filter(!(team %in% poss_team), team %in% c("home", "away"), event %in% pass_air_start) %>%
+  #   mutate(dist = sqrt((x - qb_loc$x)^2 + (y - qb_loc$y)^2)) %>%
+  #   ungroup() %>%
+  #   arrange(dist) %>%
+  #   slice(1) %>%
+  #   pull(dist)
+  # 
+  # def_loc_5_frames <- pass_play %>%
+  #   ungroup() %>%
+  #   filter(!(team %in% poss_team), team %in% c("home", "away"), frame_id == qb_loc_5_frames$frame_id) %>%
+  #   mutate(dist = sqrt((x - qb_loc_5_frames$x)^2 + (y - qb_loc_5_frames$y)^2)) %>%
+  #   arrange(dist) %>%
+  #   slice(1) %>%
+  #   pull(dist)
+  # 
+  # def_tot <- tibble(no_frame_rush_sep = def_loc, five_frame_rush_sep = def_loc_5_frames) %>%
+  #   mutate(roc_rush = (no_frame_rush_sep - five_frame_rush_sep) / 0.5)
+  # 
   
-  # Corner case for when a pass event is not recorded despite existing
-  if(length(qb_loc$x) == 0){
-    # pass event wasnt recorded, approximate
-    if(pass_play$play_direction[1] %in% 'left'){
-      # new x < old x + 0.5 means pass
-      qb_loc <- pass_play %>%
-        mutate(x_change = lead(x) - x) %>%
-        filter(x_change > 0.5) %>% 
-        arrange(frame_id) %>% 
-        slice(1)
-    } else{
-      qb_loc <- pass_play %>%
-        mutate(x_change = lead(x) - x) %>%
-        filter(x_change < -0.5) %>% 
-        arrange(frame_id) %>% 
-        slice(1)
-    }
-  }
-  
-  qb_loc_5_frames <- pass_play %>%
-    filter(position %in% "QB", frame_id == (qb_loc$frame_id - 5)) %>%
-    ungroup() %>%
-    slice(1) %>%
-    select(x, y, frame_id)
-  
-  def_loc <- pass_play %>%
-    filter(!(team %in% poss_team), team %in% c("home", "away"), event %in% pass_air_start) %>%
-    mutate(dist = sqrt((x - qb_loc$x)^2 + (y - qb_loc$y)^2)) %>%
-    ungroup() %>%
-    arrange(dist) %>%
-    slice(1) %>%
-    pull(dist)
-  
-  def_loc_5_frames <- pass_play %>%
-    ungroup() %>%
-    filter(!(team %in% poss_team), team %in% c("home", "away"), frame_id == qb_loc_5_frames$frame_id) %>%
-    mutate(dist = sqrt((x - qb_loc_5_frames$x)^2 + (y - qb_loc_5_frames$y)^2)) %>%
-    arrange(dist) %>%
-    slice(1) %>%
-    pull(dist)
-  
-  def_tot <- tibble(no_frame_rush_sep = def_loc, five_frame_rush_sep = def_loc_5_frames) %>%
-    mutate(roc_rush = (no_frame_rush_sep - five_frame_rush_sep) / 0.5)
+  # New data has no pass rushers, make smarter change later
+  def_tot <- NA_real_
   
   return(def_tot)
 }
