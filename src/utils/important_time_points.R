@@ -1,3 +1,10 @@
+# REDO all_time_points_decisions
+# Why? For BDB I dont need EVERY frame
+# Instead I just need pass release and pass arrival
+# Its not about decision making yet though it may be at some point
+
+# Instead make it important_time_points.R
+
 # Expected Max Yards Calculation
 # Doing in a separate file from QB Evaluation as that file is already getting terribly cumbersome
 flog.appender(appender.file('logs/all_time_points_decisions.log'), 'all_time')
@@ -176,7 +183,7 @@ ownership_at_throw <- function(one_frame, influence,
                                ball_speed = 20, run = FALSE,
                                ball_coords = NA){
   # Ball speed is set at 20 yards per second as an exploratory measure, used as argument to be tailored
-  #tictoc::tic()
+
   # QB position for my calculations
   qb_loc <- one_frame %>%
     filter(position %in% 'QB') %>%
@@ -234,16 +241,13 @@ ownership_at_throw <- function(one_frame, influence,
   } else{
     ball_centric_output <- list(NA)
   }
-  #tictoc::toc()
-  
-  #tictoc::tic()
+
   receiver_ownership_proj <- receiver_loc %>%
     mutate(player_centric = map2(arrival_x, arrival_y, ~sub_fn(one_frame, .x, .y, influence)),
            ball_centric= ball_centric_output) %>%
     dplyr::select(nfl_id, display_name, air_time_ball = time_to_arrival,
                   air_yards_x, air_dist, player_centric, ball_centric) %>%
     unnest(cols = c(player_centric, ball_centric), names_sep = "_")
-  #tictoc::toc()
   
   return(receiver_ownership_proj)
 }
@@ -289,30 +293,10 @@ ownership_metric_wrapper <- function(pass_play, first_elig, last_elig, is_footba
   return(pass_play)
 }
 
-# That looks like it will work, now to do this on a game level
-# first_attempt <- tracking %>%
-#   mutate(first_elig = map_int(data, ~first_elig_frame(.)),
-#          last_elig = map_int(data, ~last_elig_frame(.)),
-#          basic_covariates = pmap(list(data, first_elig, last_elig),
-#                                         ~ simple_covariates(..1, ..2, ..3)),
-#          complex_covariates = pmap(list(data, first_elig, last_elig),
-#                                    ~ ownership_metric_wrapper(..1, ..2, ..3)))
-
-# View(head(first_attempt))
-# one_play <- first_attempt %>%
-#   slice(1)
-
-# one_play
-# one_play$basic_covariates
-# one_play$complex_covariates 
-# 
-# one_play %>% dplyr::select(complex_covariates) %>% unnest() %>% dplyr::select(-frame_inf) %>% slice(1) %>% unnest()
-# one_play %>% dplyr::select(basic_covariates) %>% unnest() %>% slice(1)
-
 joiner_fn <- function(basic_cov, complex_cov){
   rec_sep <- basic_cov %>% # Fix joiner function for the new pocket_dist function location
     dplyr::select(frame_id_2, no_frame_rush_sep = rush_sep, qb_vel = qb_speed,
-           time_to_throw = time_throw, pocket_dist, rec_separation = rec_sep) %>%
+                  time_to_throw = time_throw, pocket_dist, rec_separation = rec_sep) %>%
     unnest(rec_separation)
   
   sideline_sep <- basic_cov %>%
@@ -333,7 +317,7 @@ joiner_fn <- function(basic_cov, complex_cov){
 # second_attempt <- first_attempt %>%
 #   dplyr::select(-data) %>%
 #   mutate(covariates = map2(basic_covariates, complex_covariates, ~ joiner_fn(.x, .y)))
-  
+
 # This structure seems to work but I obviously need to parallelize this
 # Even if I manually have to do this game by game, parallel will save me time
 
@@ -356,12 +340,12 @@ epsilon <- 0
 # Parallelize with future_map
 #plan(multisession, workers = max(availableCores() - 4, 1))
 
-# Iteration 1 worked, lets try the rest!
-for(i in 1:17){
+for(i in 2:2){
+  # This info comes from parallel_observed_new, should probably move it to main
+  # Note that i = 1:17 goes 1, 10, 11, .. due to character naming
   file_name <- file_list[i]
   
-  flog.info('Starting iteration %s at time %s.', i, format(Sys.time(), '%X'), name = 'all_time')
-
+  tictoc::tic()
   tracking <- read_csv(paste0(default_path, file_name)) %>%
     select_at(select_cols) %>%
     janitor::clean_names() %>%
@@ -376,7 +360,6 @@ for(i in 1:17){
   # Control whether offensive routes are standardized: False for visualization, True for work
   reorient <- FALSE
   
-  # Do some basic cleaning to start
   tictoc::tic()
   tracking_clean <- tracking %>%
     left_join(possession) %>%
@@ -398,28 +381,33 @@ for(i in 1:17){
            complete = map_lgl(data, play_success),
            fake_pt = map_dbl(data, fake_punt),
            qb_check = map_dbl(data, no_qb),
-           pass_recorded = map_lgl(data, ~pass_start_event(.))) %>%
+           pass_recorded = map_lgl(data, ~pass_start_event(.)),
+           check_pass_catchers = map_dbl(data,
+                                         function(x){sum(x$position %in% c("WR", "TE", "RB", "HB", "FB"))})) %>%
     left_join(players %>% dplyr::select(nfl_id, display_name), by = c("target" = "nfl_id")) %>%
-    filter(!is.na(target), !is.na(fake_pt), !is.na(qb_check), pass_recorded) %>%
+    filter(!is.na(target), !is.na(fake_pt), !is.na(qb_check), pass_recorded, check_pass_catchers > 0) %>%
     mutate(receiver = display_name) %>%
-    dplyr::select(-display_name)
+    dplyr::select(-display_name) %>%
+    dplyr::select(game_id, play_id, data, pass_result, target)
   rm(tracking_clean)
   tictoc::toc()
   
   # Begin debugging here, this is going to be a train wreck
+  # Lets change this to only hold throw time and throw arrival events
   tictoc::tic()
   parallel_res <- tracking_additional %>%
-    slice(1:5) %>%
+    slice(1:50) %>%
     mutate(first_elig = map_int(data, ~first_elig_frame(.)),
            last_elig = map_int(data, ~last_elig_frame(.)) + epsilon,
            pocket_dist = pmap(list(data, first_elig, last_elig),
-                             ~pocket_fixed(..1, ..2, ..3)))
-  rm(tracking_additional)
+                              ~pocket_fixed(..1, ..2, ..3)))
+  #rm(tracking_additional)
   tictoc::toc()
   
   # Good through here
   tictoc::tic()
   parallel_res <- parallel_res %>%
+    mutate(data = map(data, function(x){x %>% filter(event %in% c(pass_air_start, pass_air_end))})) %>%
     mutate(basic_covariates = pmap(list(data, first_elig, last_elig),
                                    ~ simple_covariates(..1, ..2, ..3, run = TRUE)),
            basic_covariates = map2(basic_covariates, pocket_dist,
@@ -430,15 +418,15 @@ for(i in 1:17){
   # Lets see
   tictoc::tic()
   parallel_res_temp <- parallel_res %>%
-           mutate(complex_covariates = future_pmap(list(data, first_elig, last_elig),
-                                     ~ ownership_metric_wrapper(..1, ..2, ..3,
-                                                                is_football = new_age_tracking_data)))
+    mutate(complex_covariates = future_pmap(list(data, first_elig, last_elig),
+                                            ~ ownership_metric_wrapper(..1, ..2, ..3,
+                                                                       is_football = new_age_tracking_data)))
   tictoc::toc()
-  # 88 seconds for 5 sequential
+  # 88 seconds for 5 sequential, 4 seconds now with frame reduction, 40 seconds for 50 frames
   
   tictoc::tic()
   parallel_res_temp <- parallel_res_temp %>%
-           mutate(covariates = map2(basic_covariates, complex_covariates, ~ joiner_fn(.x, .y))) %>%
+    mutate(covariates = map2(basic_covariates, complex_covariates, ~ joiner_fn(.x, .y))) %>%
     dplyr::select(-data, -basic_covariates, -complex_covariates)
   tictoc::toc()
   
@@ -448,10 +436,9 @@ for(i in 1:17){
   parallel_res_temp %>%
     unnest(covariates) %>%
     write_rds(paste0(default_path, "all_frames_covariates_week", i, ".rds"))
-
+  
   rm(parallel_res, parallel_res_temp)
   gc(verbose=FALSE)
 }
-
 
 

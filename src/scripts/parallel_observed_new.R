@@ -51,7 +51,7 @@ if(!new_age_tracking_data){
 }
 
 players <- players %>%
-  select(nfl_id, display_name, position)
+  dplyr::select(nfl_id, display_name, position)
 
 # Gather positions that I need for analysis, eligible receivers and defensive players
 player_pos_id_key <- players %>%
