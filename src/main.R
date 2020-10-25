@@ -32,9 +32,9 @@ pacman::p_load(gganimate, cowplot, gifski, bezier, magrittr,
                data.table, snakecase, tictoc, glue,
                tidyverse, future, furrr, dtwclust, glmnet)
 
+#remotes::install_github("tidymodels/discrim")
+#remotes::install_github("tidymodels/stacks", ref = "main")
 library(tidymodels)
-remotes::install_github("tidymodels/discrim")
-remotes::install_github("tidymodels/stacks", ref = "main")
 library(stacks)
 library(discrim)
 
