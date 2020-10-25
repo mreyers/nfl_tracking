@@ -350,8 +350,11 @@ epsilon <- 0
 # Parallelize with future_map
 plan(multisession, workers = max(availableCores() - 2, 1))
 
-for(i in 1:1){
+# Iteration 1 worked, lets try the rest!
+for(i in 2:17){
   file_name <- file_list[i]
+  
+  flog.info('Starting iteration %s at time %s.', i, format(Sys.time(), '%X'), name = 'all_time')
   
   tracking <- read_csv(paste0(default_path, file_name)) %>%
     select_at(select_cols) %>%
