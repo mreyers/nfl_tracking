@@ -58,6 +58,10 @@ flog.info('Since BDB3 is a thing allow for an option to manipulate incoming data
 new_age_tracking_data <- TRUE
 time_of_arrival <- TRUE
 
+# # # # # # # #
+# Task 0: Should probably do a parameter setting piece instead of grabbing parts
+# of parallel_observed_new.R
+
 # # # # # # # # # # # # # # # # # #
 # Task 1: Generate the covariates necessary to calculate probability of catching the ball
 # Load the games, players, and list of plays in the data set
@@ -74,7 +78,13 @@ flog.info('Completed tidy_build_completion_probability.R
 
 # # # # # # # # # # # # # # # # # #
 # Task 3: Generate frame by frame covariates necessary to apply the model
-source('utils/all_time_points_decisions.R') 
+all_frames <- FALSE
+if(all_frame){
+  source('utils/all_time_points_decisions.R') 
+} else{
+  source("utils/important_time_points.R")
+}
+
 source('additional_all_time_points_fns.R') 
 source('sacks_and_runs.R') # Deal with the covariates for plays that are sacks or runs
 source('prob_incomplete.R') 

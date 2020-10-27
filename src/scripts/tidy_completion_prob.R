@@ -48,10 +48,12 @@ rm(ngs_features)
 specific_vars_at_release <- new_features %>%
   ungroup() %>%
   select(pass_result_f, air_dist, rec_separation,
-         sideline_sep, no_frame_rush_sep, 
+         sideline_sep,
          qb_vel, time_to_throw, dist_from_pocket, 
          # Ownership Features, only used 1 due to colinearity
-         n_cells_at_throw, own_intensity_at_throw, own_avg_intensity_at_throw,
+         n_cells = n_cells_at_throw,
+         own_intensity = own_intensity_at_throw,
+         own_avg_intensity = own_avg_intensity_at_throw,
          # Additional features that differ slightly
          air_yards_x,
          # Context Features
@@ -62,16 +64,19 @@ specific_vars_at_release <- new_features %>%
 specific_vars_at_arrival <- new_features %>%
   ungroup() %>%
   select(pass_result_f, air_dist, rec_separation,
-         sideline_sep, no_frame_rush_sep, 
+         sideline_sep, 
          qb_vel, time_to_throw, dist_from_pocket, 
          # Ownership Features, only used 1 due to colinearity
-         n_cells_at_arrival, own_intensity_at_arrival, own_avg_intensity_at_arrival,
+         n_cells = n_cells_at_arrival,
+         own_intensity = own_intensity_at_arrival,
+         own_avg_intensity = own_avg_intensity_at_arrival,
          # Additional features that differ slightly
          air_yards_x,
          # Context Features
          yardline_100, down, ydstogo)
 
 # Using 75/25 split instead of 85/15 as in paper
+set.seed(1312020)
 type <- "release" # "release" / "arrival"
 if(type == "arrival"){
   splits <- initial_split(specific_vars_at_arrival, 0.75, strata = pass_result_f)
@@ -85,7 +90,7 @@ test_ngs <- testing(splits)
 
 thesis_recipe <- recipe(pass_result_f ~ ., data = train_ngs) %>%
   # Just this column has <10 NAs, breaking workflow
-  step_knnimpute(own_avg_intensity_at_throw) %>%
+  step_knnimpute(own_avg_intensity) %>%
   step_zv(all_predictors()) %>%
   step_num2factor(down, levels = c("1", "2", "3", "4")) %>%
   step_pca(all_numeric()) %>%
@@ -94,6 +99,12 @@ thesis_recipe <- recipe(pass_result_f ~ ., data = train_ngs) %>%
 comp_prob_wflow <- workflow() %>%
   add_recipe(thesis_recipe)
 
+check <- thesis_recipe %>%
+  prep() %>%
+  bake(train_ngs)
+glimpse(check)
+
+saveRDS(thesis_recipe, paste0("Data_new/", type, "/comp_prob_recipe.rds"))
 # Need to define basic model architectures with which I will be tuning
 # Since goal is ensemble, need same CV splits & control grid
 # stacks should be loaded from main.R
@@ -185,7 +196,7 @@ comp_prob_stack <- stacks() %>%
   add_candidates(rf_res) %>%
   add_candidates(gbm_res) %>%
   add_candidates(glm_res) %>%
-  # add_candidates(nb_res) %>%
+  #add_candidates(nb_res) %>%
   # Ensemble
   blend_predictions() %>%
   fit_members()

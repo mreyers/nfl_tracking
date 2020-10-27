@@ -294,6 +294,7 @@ ownership_metric_wrapper <- function(pass_play, first_elig, last_elig, is_footba
 }
 
 joiner_fn <- function(basic_cov, complex_cov){
+
   rec_sep <- basic_cov %>% # Fix joiner function for the new pocket_dist function location
     dplyr::select(frame_id_2, no_frame_rush_sep = rush_sep, qb_vel = qb_speed,
                   time_to_throw = time_throw, pocket_dist, rec_separation = rec_sep) %>%
@@ -338,11 +339,12 @@ flog.info('Parallel component established. Now to run.', name = 'all_time')
 epsilon <- 0
 
 # Parallelize with future_map
-#plan(multisession, workers = max(availableCores() - 4, 1))
+plan(multisession, workers = max(availableCores() - 2, 1))
 
-for(i in 2:2){
+for(i in 1:17){
   # This info comes from parallel_observed_new, should probably move it to main
   # Note that i = 1:17 goes 1, 10, 11, .. due to character naming
+  flog.info('Starting iteration %s at time %s.', i, format(Sys.time(), '%X'), name = 'all_time')
   file_name <- file_list[i]
   
   tictoc::tic()
@@ -396,7 +398,6 @@ for(i in 2:2){
   # Lets change this to only hold throw time and throw arrival events
   tictoc::tic()
   parallel_res <- tracking_additional %>%
-    slice(1:50) %>%
     mutate(first_elig = map_int(data, ~first_elig_frame(.)),
            last_elig = map_int(data, ~last_elig_frame(.)) + epsilon,
            pocket_dist = pmap(list(data, first_elig, last_elig),
@@ -406,26 +407,42 @@ for(i in 2:2){
   
   # Good through here
   tictoc::tic()
+  safe_simple_covariates <- safely(simple_covariates, otherwise = NA)
+  
   parallel_res <- parallel_res %>%
     mutate(data = map(data, function(x){x %>% filter(event %in% c(pass_air_start, pass_air_end))})) %>%
-    mutate(basic_covariates = pmap(list(data, first_elig, last_elig),
-                                   ~ simple_covariates(..1, ..2, ..3, run = TRUE)),
-           basic_covariates = map2(basic_covariates, pocket_dist,
+    mutate(basic_covariates_check = pmap(list(data, first_elig, last_elig),
+                                   ~ safe_simple_covariates(..1, ..2, ..3, run = FALSE)),
+           basic_covariates = map(basic_covariates_check, ~pluck(., "result")),
+           error = map(basic_covariates_check, ~pluck(., "error")),
+           type_error = map_chr(error, typeof))
+  
+  parallel_res <- parallel_res %>%
+    # Keep the ones with no errors
+    filter(type_error %in% "NULL") %>%
+    mutate(basic_covariates = map2(basic_covariates, pocket_dist,
                                    ~ .x %>% mutate(pocket_dist = list(.y)))) %>%
-    dplyr::select(-pocket_dist) # remove from exterior, now mapped it back
+    dplyr::select(-c(pocket_dist, basic_covariates_check, error, type_error)) # remove from exterior, now mapped it back
   tictoc::toc()
   
   # Lets see
   tictoc::tic()
+  safe_ownership_wrapper <- safely(ownership_metric_wrapper, otherwise = NA)
   parallel_res_temp <- parallel_res %>%
-    mutate(complex_covariates = future_pmap(list(data, first_elig, last_elig),
-                                            ~ ownership_metric_wrapper(..1, ..2, ..3,
-                                                                       is_football = new_age_tracking_data)))
+    mutate(complex_covariates_check = future_pmap(list(data, first_elig, last_elig),
+                                            ~ safe_ownership_wrapper(..1, ..2, ..3,
+                                                                     is_football = new_age_tracking_data)),
+           complex_covariates = map(complex_covariates_check, ~pluck(., "result")),
+           error = map(complex_covariates_check, ~pluck(., "error")),
+           type_error = map_chr(error, typeof)) %>%
+    filter(type_error %in% "NULL")
   tictoc::toc()
   # 88 seconds for 5 sequential, 4 seconds now with frame reduction, 40 seconds for 50 frames
   
   tictoc::tic()
   parallel_res_temp <- parallel_res_temp %>%
+    mutate(data_check = map_dbl(basic_covariates, function(x){dim(x)[1]})) %>%
+    filter(data_check > 0) %>%
     mutate(covariates = map2(basic_covariates, complex_covariates, ~ joiner_fn(.x, .y))) %>%
     dplyr::select(-data, -basic_covariates, -complex_covariates)
   tictoc::toc()
@@ -435,7 +452,7 @@ for(i in 2:2){
   
   parallel_res_temp %>%
     unnest(covariates) %>%
-    write_rds(paste0(default_path, "all_frames_covariates_week", i, ".rds"))
+    write_rds(paste0(default_path, "pass_and_catch_frames_covariates_week", i, ".rds"))
   
   rm(parallel_res, parallel_res_temp)
   gc(verbose=FALSE)
