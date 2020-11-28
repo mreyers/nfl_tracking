@@ -85,9 +85,15 @@ if(all_frame){
   source("utils/important_time_points.R")
 }
 
-source('additional_all_time_points_fns.R') 
-source('sacks_and_runs.R') # Deal with the covariates for plays that are sacks or runs
-source('prob_incomplete.R') 
+flog.info("These additional functions handle air yards, dealt with elsewhere.",
+          name = "main")
+#source('additional_all_time_points_fns.R') 
+flog.info("There are no sacks and runs to deal with in this data.", name = "main")
+#source('sacks_and_runs.R') # Deal with the covariates for plays that are sacks or runs
+flog.info("There will be a greater need for interception probability shortly.
+          Update to tidymodels infrastructure when integrated.",
+          name = "main")
+#source('prob_incomplete.R') 
 source('yac_covariates.R')
 flog.info('Completed building frame by frame covariates. Onto prediction.', name = 'main')
 
