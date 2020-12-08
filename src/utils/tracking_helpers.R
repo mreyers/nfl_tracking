@@ -1538,7 +1538,7 @@ quick_nest_fix <- function(data, game_id, play_id){
 handle_no_ball <- function(data, is_football = FALSE){
   if(!is_football){
     # Old tracking data calls the football "ball"
-    if(!any(data$team %in% 'football')){
+    if(!any(data$team %in% 'ball')){
       return(NA_real_)
     } else{
       return(1)

@@ -16,23 +16,44 @@ games_reduced <- games %>%
   select(game_id, home_team_abbr, visitor_team_abbr)
 
 # One weird yards to go / distance combo in PHI vs ATL, not sure why, probably data record error
-seasons <- 2018
-nfl_pbp <- plays %>%
-  left_join(games_reduced, by = "game_id") %>%
-  mutate(yardline_100 = if_else(is.na(absolute_yardline_number),
-                                yardline_number + 
-                                  (50 - yardline_number) * as.numeric(yardline_side != possession_team),
-                                # For non-missing, just need to reduce by 10
-                                absolute_yardline_number - 10),
-         # Just in case
-         yardline_100 = if_else(is.na(yardline_100), 50, yardline_100),
-         score_differential = if_else(possession_team == home_team_abbr,
-                                      pre_snap_home_score - pre_snap_visitor_score,
-                                      -1 * (pre_snap_home_score - pre_snap_visitor_score)),
-         is_redzone = factor(yardline_100 < 20, levels = c(FALSE, TRUE))) %>%
-  dplyr::select(game_id,
-                play_id, yardline_100, down, ydstogo = yards_to_go,
-                score_differential, is_redzone, number_of_pass_rushers)
+seasons <- 2017
+
+if(seasons == 2018){
+  # 2018, or BDB 3, has different plays structure
+  nfl_pbp <- plays %>%
+    left_join(games_reduced, by = "game_id") %>%
+    mutate(yardline_100 = if_else(is.na(absolute_yardline_number),
+                                  yardline_number + 
+                                    (50 - yardline_number) * as.numeric(yardline_side != possession_team),
+                                  # For non-missing, just need to reduce by 10
+                                  absolute_yardline_number - 10),
+           # Just in case
+           yardline_100 = if_else(is.na(yardline_100), 50, yardline_100),
+           score_differential = if_else(possession_team == home_team_abbr,
+                                        pre_snap_home_score - pre_snap_visitor_score,
+                                        -1 * (pre_snap_home_score - pre_snap_visitor_score)),
+           is_redzone = factor(yardline_100 < 20, levels = c(FALSE, TRUE))) %>%
+    dplyr::select(game_id,
+                  play_id, yardline_100, down, ydstogo = yards_to_go,
+                  score_differential, is_redzone, number_of_pass_rushers)
+} else {
+  # 2017, or BDB 1, has some slight modifications needed to generate the above
+  nfl_pbp <- plays %>%
+    left_join(games_reduced, by = "game_id") %>%
+    filter(!is.na(pass_result)) %>%
+    mutate(yardline_100 = if_else(possession_team == yardline_side,
+                                  100 - yardline_number,
+                                  yardline_number),
+           yardline_100 = if_else(is.na(yardline_100), 50, yardline_100),
+           score_differential = if_else(home_team_abbr == possession_team,
+                                        visitor_score_before_play - home_score_before_play,
+                                        home_score_before_play - visitor_score_before_play),
+           is_redzone = factor(yardline_100 < 20, levels = c(FALSE, TRUE))) %>%
+    select(game_id,
+           play_id, yardline_100, down, ydstogo = yards_to_go,
+           score_differential, is_redzone, number_of_pass_rushers)
+}
+
 
 flog.info('Set up really simple data splitting. Can obviously
           be improved, may be later. Who knows.', name = 'comp_prob')
@@ -52,8 +73,9 @@ new_features <-
   ), levels = c("WR", "TE", "RB"))) %>%
   select(-position) %>%
   # Most of these are flagged plays, a few random data errors
-  filter(!is.na(score_differential))
-rm(ngs_features)
+  filter(!is.na(score_differential)) %>%
+  ungroup()
+#rm(ngs_features)
 
 # For the new data, I should definitely remove rush separation as new data
 # has no lineman information
@@ -128,7 +150,7 @@ check <- thesis_recipe %>%
   bake(train_ngs)
 glimpse(check)
 
-saveRDS(thesis_recipe, paste0("Data_new/", type, "/comp_prob_recipe.rds"))
+saveRDS(thesis_recipe, paste0(default_path, type, "/comp_prob_recipe.rds"))
 # Need to define basic model architectures with which I will be tuning
 # Since goal is ensemble, need same CV splits & control grid
 # stacks should be loaded from main.R
