@@ -251,7 +251,7 @@ ownership_at_throw <- function(one_frame, influence,
 pass_arrive_location <- function(pass_play){
   ball_coords <- pass_play %>%
     arrange(desc(frame_id)) %>%
-    filter(team %in% "football") %>%
+    filter(team %in% c("football", "ball")) %>%
     slice(1) %>%
     select(x, y)
   
@@ -281,7 +281,7 @@ ownership_metric_wrapper <- function(pass_play, first_elig, last_elig, is_footba
   pass_play <- pass_play %>%
     mutate(ownership_metrics = pmap(list(data, frame_inf, ball_at_arrival_coords),
                                     ~ownership_at_throw(..1, ..2, 
-                                                        ball_speed = 20, run =TRUE,
+                                                        ball_speed = 20, run =FALSE,
                                                         ball_coords = ..3))) %>%
     dplyr::select(-data, -frame_inf)
   tictoc::toc()
@@ -354,7 +354,7 @@ flog.info('Parallel component established. Now to run.', name = 'all_time')
 epsilon <- 0
 
 # Parallelize with future_map
-#plan(multisession, workers = max(availableCores() - 4, 1))
+plan(multisession, workers = max(availableCores() - 4, 1))
 
 # Iteration 1 worked, lets try the rest!
 for(i in 1:17){
@@ -367,7 +367,6 @@ for(i in 1:17){
     janitor::clean_names() %>%
     left_join(players %>% select(-display_name), by = "nfl_id") %>%
     rename(velocity = s)
-  tictoc::toc()
   # 4 sec
   
   # Need possession team for current format
@@ -409,7 +408,6 @@ for(i in 1:17){
   # Begin debugging here, this is going to be a train wreck
   tictoc::tic()
   parallel_res <- tracking_additional %>%
-    slice(1:5) %>%
     mutate(first_elig = map_int(data, ~first_elig_frame(.)),
            last_elig = map_int(data, ~last_elig_frame(.)) + epsilon,
            pocket_dist = pmap(list(data, first_elig, last_elig),
@@ -447,7 +445,7 @@ for(i in 1:17){
   
   parallel_res_temp %>%
     unnest(covariates) %>%
-    write_rds(paste0(default_path, "all_frames_covariates_week", i, ".rds"))
+    write_rds(glue::glue("{default_path}{time_of_arrival_explicit}/all_frames_covariates_week{i}.rds"))
 
   rm(parallel_res, parallel_res_temp)
   gc(verbose=FALSE)

@@ -251,7 +251,7 @@ comp_prob_stack <- stacks() %>%
 comp_prob_stack
 
 # Save the model
-saveRDS(comp_prob_stack, glue("Data_new/{type}/comp_prob.rds"))
+saveRDS(comp_prob_stack, glue("{default_path}{type}/comp_prob.rds"))
 
 # Gut check
 theme_set(theme_bw())
@@ -266,6 +266,11 @@ comp_prob_test <- test_ngs %>%
 roc_auc(comp_prob_test,
         truth = pass_result_f,
         contains(".pred_C"))
+
+# Can probably do a bit better with touchups
+mn_log_loss(comp_prob_test,
+            truth = pass_result_f,
+            contains(".pred_C"))
 
 # Comparison of ensemble to the individual learners
 comp_prob_all_test <- test_ngs %>%
@@ -286,6 +291,9 @@ comp_prob_test %>%
   ggplot(aes(x = exp_cp, y = obs_cp, size =3)) +
   geom_point() +
   geom_abline(intercept = 0, slope = 1, col = "red", lty = 2) +
-  ggtitle("Calibration of Modified Model Nov 28") +
+  ggtitle("Calibration of Completion Probability 2017 Data") +
   xlab("Expected CP") + ylab("Observed CP") +
-  theme_bw()
+  theme_bw() +
+  theme(legend.position = "none")
+  
+
