@@ -354,11 +354,18 @@ flog.info('Parallel component established. Now to run.', name = 'all_time')
 epsilon <- 0
 
 # Parallelize with future_map
-plan(multisession, workers = max(availableCores() - 4, 1))
+plan(multisession, workers = max(availableCores() - 2, 1))
 
 # Iteration 1 worked, lets try the rest!
-for(i in 1:17){
+  # Saving data the wrong way, these are game files not weeks
+  # Update saving structure and fix weird issues with standardize play
+for(i in 41:91){
+  if(i == 40){
+    flog.info("This game is broken, no tracking on certain objects all game. Skip")
+    next
+  }
   file_name <- file_list[i]
+  save_file_name <- str_extract(file_name, "[A-z0-9_]*")
   
   flog.info('Starting iteration %s at time %s.', i, format(Sys.time(), '%X'), name = 'all_time')
 
@@ -445,7 +452,7 @@ for(i in 1:17){
   
   parallel_res_temp %>%
     unnest(covariates) %>%
-    write_rds(glue::glue("{default_path}{time_of_arrival_explicit}/all_frames_covariates_week{i}.rds"))
+    write_rds(glue::glue("{default_path}{time_of_arrival_explicit}/all_frames_covariates_{save_file_name}.rds"))
 
   rm(parallel_res, parallel_res_temp)
   gc(verbose=FALSE)
