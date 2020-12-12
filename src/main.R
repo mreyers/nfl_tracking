@@ -88,13 +88,14 @@ if(all_frames){
 
 flog.info("These additional functions handle air yards, dealt with elsewhere.",
           name = "main")
-#source('additional_all_time_points_fns.R') 
+source('additional_all_time_points_fns.R') 
 flog.info("There are no sacks and runs to deal with in this data.", name = "main")
-#source('sacks_and_runs.R') # Deal with the covariates for plays that are sacks or runs
+source('sacks_and_runs.R') # Deal with the covariates for plays that are sacks or runs
 flog.info("There will be a greater need for interception probability shortly.
           Update to tidymodels infrastructure when integrated.",
           name = "main")
-#source('prob_incomplete.R') 
+# Up to here now!
+#source('prob_incomplete.R')  <- do this one tomorrow
 source('yac_covariates.R')
 flog.info('Completed building frame by frame covariates. Onto prediction.', name = 'main')
 

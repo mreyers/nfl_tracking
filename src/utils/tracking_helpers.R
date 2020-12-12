@@ -620,24 +620,51 @@ standardize_play <- function(pass_play, reorient = FALSE){
     ungroup() %>%
     slice(1)
   
+  snap_check <- data %>%
+    select(event) %>%
+    summarize(n_snap = sum(event %in% c("ball_snap", "snap_direct"), na.rm = TRUE)) %>%
+    pull(n_snap)
+  
   print(glue::glue("Game ID: {params$game_id}, Play ID: {params$play_id}"))
   
-  line_of_scrimmage <-
-    data %>% 
-    filter(event %in% c("ball_snap", "snap_direct"), team %in% c("home", "away")) %>% 
-    group_by(game_id, play_id, team) %>% 
-    summarise(right_scrim = max(x, na.rm=TRUE), left_scrim = min(x, na.rm=TRUE),
-              poss_team = first(poss_team), .groups = "drop") %>%
-    filter(team == poss_team) %>%
-    select(game_id, play_id, right_scrim, left_scrim)
-  
-  play_direction <- data %>%
-    filter(event %in% c("ball_snap", "snap_direct")) %>%
-    group_by(game_id, play_id, team) %>%
-    summarise(mean_team = mean(x, na.rm=TRUE), .groups = "drop") %>%
-    filter(team != "ball") %>%
-    filter(mean_team == max(mean_team)) %>%
-    dplyr::select(game_id, play_id, direction_left = team, -mean_team)
+  if(snap_check == 0){
+    print("No snap detected, modified first frame approach")
+    # Fix situations where no ball snap recorded
+    line_of_scrimmage <-
+      data %>% 
+      filter(frame_id == first(frame_id), team %in% c("home", "away")) %>% 
+      group_by(game_id, play_id, team) %>% 
+      summarise(right_scrim = max(x, na.rm=TRUE), left_scrim = min(x, na.rm=TRUE),
+                poss_team = first(poss_team), .groups = "drop") %>%
+      filter(team == poss_team) %>%
+      select(game_id, play_id, right_scrim, left_scrim)
+    
+    play_direction <- data %>%
+      filter(frame_id == first(frame_id)) %>%
+      group_by(game_id, play_id, team) %>%
+      summarise(mean_team = mean(x, na.rm=TRUE), .groups = "drop") %>%
+      filter(team != "ball") %>%
+      filter(mean_team == max(mean_team)) %>%
+      dplyr::select(game_id, play_id, direction_left = team, -mean_team)
+    
+  } else{
+    line_of_scrimmage <-
+      data %>% 
+      filter(event %in% c("ball_snap", "snap_direct"), team %in% c("home", "away")) %>% 
+      group_by(game_id, play_id, team) %>% 
+      summarise(right_scrim = max(x, na.rm=TRUE), left_scrim = min(x, na.rm=TRUE),
+                poss_team = first(poss_team), .groups = "drop") %>%
+      filter(team == poss_team) %>%
+      select(game_id, play_id, right_scrim, left_scrim)
+    
+    play_direction <- data %>%
+      filter(event %in% c("ball_snap", "snap_direct")) %>%
+      group_by(game_id, play_id, team) %>%
+      summarise(mean_team = mean(x, na.rm=TRUE), .groups = "drop") %>%
+      filter(team != "ball") %>%
+      filter(mean_team == max(mean_team)) %>%
+      dplyr::select(game_id, play_id, direction_left = team, -mean_team)
+  }
   
   possession <- plays %>%
     dplyr::select(game_id, play_id, possession_team) %>%

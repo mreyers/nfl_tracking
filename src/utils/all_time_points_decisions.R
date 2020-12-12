@@ -310,6 +310,11 @@ ownership_metric_wrapper <- function(pass_play, first_elig, last_elig, is_footba
 # one_play %>% dplyr::select(basic_covariates) %>% unnest() %>% slice(1)
 
 joiner_fn <- function(basic_cov, complex_cov){
+  if(!("frame_id_2" %in% names(complex_cov))){
+    print("This play tripped an error in creating complex covariate, need to skip")
+    return(NULL)
+  }
+  
   rec_sep <- basic_cov %>% # Fix joiner function for the new pocket_dist function location
     dplyr::select(frame_id_2, no_frame_rush_sep = rush_sep, qb_vel = qb_speed,
            time_to_throw = time_throw, pocket_dist, rec_separation = rec_sep) %>%
