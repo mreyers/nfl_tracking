@@ -226,13 +226,13 @@ for(i in 1:91){
   file_name <- file_list[i]
   file_name_extract <- str_extract(file_name, "[0-9]+")
   
-  tictoc::tic()
+  #tictoc::tic()
   tracking <- read_csv(paste0(default_path, file_name)) %>%
     select_at(select_cols) %>%
     janitor::clean_names() %>%
     left_join(players %>% select(-display_name), by = "nfl_id") %>%
     rename(velocity = s)
-  tictoc::toc()
+  #tictoc::toc()
   # 4 sec
   
   # Need possession team for current format
@@ -241,7 +241,7 @@ for(i in 1:91){
   # Control whether offensive routes are standardized: False for visualization, True for work
   reorient <- FALSE
   
-  tictoc::tic()
+  #tictoc::tic()
   tracking_clean <- tracking %>%
     left_join(possession) %>%
     nest(-game_id, -play_id) %>%
@@ -251,11 +251,11 @@ for(i in 1:91){
            cleaning = map_dbl(data, ~handle_no_ball(.))) %>%
     filter(!is.na(cleaning), pass_result %in% c('C', 'I', 'IN'))
   rm(tracking)
-  tictoc::toc()
+  #tictoc::toc()
   # 77 sec
   
   # Add additional filtering criteria
-  tictoc::tic()
+  #tictoc::tic()
   tracking_additional <- tracking_clean %>%
     mutate(data = map(data, ball_fix_2),
            target = map_dbl(data, intended_receiver, is_football = new_age_tracking_data),
@@ -274,7 +274,7 @@ for(i in 1:91){
     #left_join(receiver, by = c("game_id", "play_id")) %>%
     #rename(target = target_nfl_id)
   rm(tracking_clean)
-  tictoc::toc()
+  #tictoc::toc()
   
   # Looks like Brady's data might be messed up for 2017092407
   tracking_rel_frames <- tracking_additional %>%
