@@ -251,7 +251,7 @@ ownership_at_throw <- function(one_frame, influence,
 pass_arrive_location <- function(pass_play){
   ball_coords <- pass_play %>%
     arrange(desc(frame_id)) %>%
-    filter(team %in% "football") %>%
+    filter(team %in% c("football", "ball")) %>%
     slice(1) %>%
     select(x, y)
   
@@ -281,7 +281,7 @@ ownership_metric_wrapper <- function(pass_play, first_elig, last_elig, is_footba
   pass_play <- pass_play %>%
     mutate(ownership_metrics = pmap(list(data, frame_inf, ball_at_arrival_coords),
                                     ~ownership_at_throw(..1, ..2, 
-                                                        ball_speed = 20, run =TRUE,
+                                                        ball_speed = 20, run =FALSE,
                                                         ball_coords = ..3))) %>%
     dplyr::select(-data, -frame_inf)
   tictoc::toc()
@@ -310,6 +310,11 @@ ownership_metric_wrapper <- function(pass_play, first_elig, last_elig, is_footba
 # one_play %>% dplyr::select(basic_covariates) %>% unnest() %>% slice(1)
 
 joiner_fn <- function(basic_cov, complex_cov){
+  if(!("frame_id_2" %in% names(complex_cov))){
+    print("This play tripped an error in creating complex covariate, need to skip")
+    return(NULL)
+  }
+  
   rec_sep <- basic_cov %>% # Fix joiner function for the new pocket_dist function location
     dplyr::select(frame_id_2, no_frame_rush_sep = rush_sep, qb_vel = qb_speed,
            time_to_throw = time_throw, pocket_dist, rec_separation = rec_sep) %>%
@@ -354,13 +359,19 @@ flog.info('Parallel component established. Now to run.', name = 'all_time')
 epsilon <- 0
 
 # Parallelize with future_map
-libs <- .libPaths()[3]
-cl <- future::makeClusterPSOCK(4L, rscript_libs = c(libs, "*"))
-plan(cluster, workers = cl)
-#options(future.debug = TRUE)
+plan(multisession, workers = max(availableCores() - 2, 1))
+
 # Iteration 1 worked, lets try the rest!
-for(i in 3:17){
+  # Saving data the wrong way, these are game files not weeks
+  # Update saving structure and fix weird issues with standardize play
+for(i in 41:91){
+  if(i == 40){
+    flog.info("This game is broken, no tracking on certain objects all game. Skip")
+    next
+  }
+  
   file_name <- file_list[i]
+  save_file_name <- str_extract(file_name, "[A-z0-9_]*")
   
   flog.info('Starting iteration %s at time %s.', i, format(Sys.time(), '%X'), name = 'all_time')
 
@@ -370,7 +381,6 @@ for(i in 3:17){
     janitor::clean_names() %>%
     left_join(players %>% select(-display_name), by = "nfl_id") %>%
     rename(velocity = s)
-  tictoc::toc()
   # 4 sec
   
   # Need possession team for current format
@@ -456,7 +466,7 @@ for(i in 3:17){
   
   parallel_res_temp %>%
     unnest(covariates) %>%
-    write_rds(paste0(default_path, "all_frames_covariates_week", i, ".rds"))
+    write_rds(glue::glue("{default_path}{time_of_arrival_explicit}/all_frames_covariates_{save_file_name}.rds"))
 
   rm(parallel_res, parallel_res_temp)
   gc(verbose=FALSE)

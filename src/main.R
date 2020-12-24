@@ -55,8 +55,9 @@ flog.info('Since BDB3 is a thing allow for an option to manipulate incoming data
            allow for user to switch between at time of throw and at time of arrival.',
            name = 'main')
 
-new_age_tracking_data <- TRUE
-time_of_arrival <- TRUE
+new_age_tracking_data <- FALSE
+time_of_arrival <- FALSE
+time_of_arrival_explicit <- if_else(time_of_arrival, "arrival", "release")
 
 # # # # # # # #
 # Task 0: Should probably do a parameter setting piece instead of grabbing parts
@@ -79,15 +80,22 @@ flog.info('Completed tidy_build_completion_probability.R
 # # # # # # # # # # # # # # # # # #
 # Task 3: Generate frame by frame covariates necessary to apply the model
 all_frames <- FALSE
-if(all_frame){
+if(all_frames){
   source('utils/all_time_points_decisions.R') 
 } else{
   source("utils/important_time_points.R")
 }
 
+flog.info("These additional functions handle air yards, dealt with elsewhere.",
+          name = "main")
 source('additional_all_time_points_fns.R') 
+flog.info("There are no sacks and runs to deal with in this data.", name = "main")
 source('sacks_and_runs.R') # Deal with the covariates for plays that are sacks or runs
-source('prob_incomplete.R') 
+flog.info("There will be a greater need for interception probability shortly.
+          Update to tidymodels infrastructure when integrated.",
+          name = "main")
+# Up to here now!
+#source('prob_incomplete.R')  <- do this one tomorrow
 source('yac_covariates.R')
 flog.info('Completed building frame by frame covariates. Onto prediction.', name = 'main')
 
