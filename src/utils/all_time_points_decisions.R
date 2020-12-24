@@ -339,7 +339,7 @@ joiner_fn <- function(basic_cov, complex_cov){
 
 ###########################################################
 ###########################################################
-num_cores <- parallel::detectCores() - 2
+#num_cores <- parallel::detectCores() - 2
 plan(sequential) # To be parallelized later, this is for debugging
 
 flog.info('Parallel component established. Now to run.', name = 'all_time')
@@ -354,14 +354,17 @@ flog.info('Parallel component established. Now to run.', name = 'all_time')
 epsilon <- 0
 
 # Parallelize with future_map
-#plan(multisession, workers = max(availableCores() - 4, 1))
-
+libs <- .libPaths()[3]
+cl <- future::makeClusterPSOCK(4L, rscript_libs = c(libs, "*"))
+plan(cluster, workers = cl)
+#options(future.debug = TRUE)
 # Iteration 1 worked, lets try the rest!
-for(i in 1:17){
+for(i in 3:17){
   file_name <- file_list[i]
   
   flog.info('Starting iteration %s at time %s.', i, format(Sys.time(), '%X'), name = 'all_time')
 
+  tictoc::tic()
   tracking <- read_csv(paste0(default_path, file_name)) %>%
     select_at(select_cols) %>%
     janitor::clean_names() %>%
@@ -409,7 +412,6 @@ for(i in 1:17){
   # Begin debugging here, this is going to be a train wreck
   tictoc::tic()
   parallel_res <- tracking_additional %>%
-    slice(1:5) %>%
     mutate(first_elig = map_int(data, ~first_elig_frame(.)),
            last_elig = map_int(data, ~last_elig_frame(.)) + epsilon,
            pocket_dist = pmap(list(data, first_elig, last_elig),
@@ -420,12 +422,19 @@ for(i in 1:17){
   # Good through here
   tictoc::tic()
   parallel_res <- parallel_res %>%
-    mutate(basic_covariates = pmap(list(data, first_elig, last_elig),
+    mutate(basic_covariates = future_pmap(list(data, first_elig, last_elig),
                                    ~ simple_covariates(..1, ..2, ..3, run = TRUE)),
            basic_covariates = map2(basic_covariates, pocket_dist,
                                    ~ .x %>% mutate(pocket_dist = list(.y)))) %>%
     dplyr::select(-pocket_dist) # remove from exterior, now mapped it back
   tictoc::toc()
+  # 17 seconds for 5 sequential, 11 seconds parallel
+  
+  # Quick forced tidy up
+  plan(sequential)
+  gc(verbose = FALSE)
+  cl <- future::makeClusterPSOCK(4L, rscript_libs = c(libs, "*"))
+  plan(cluster, workers = cl)
   
   # Lets see
   tictoc::tic()
@@ -434,7 +443,7 @@ for(i in 1:17){
                                      ~ ownership_metric_wrapper(..1, ..2, ..3,
                                                                 is_football = new_age_tracking_data)))
   tictoc::toc()
-  # 88 seconds for 5 sequential
+  # 88 seconds for 5 sequential, 60 for 2 parallel, 40 for 4 parallel
   
   tictoc::tic()
   parallel_res_temp <- parallel_res_temp %>%
@@ -453,5 +462,5 @@ for(i in 1:17){
   gc(verbose=FALSE)
 }
 
-
+#4+ hours per iteration
 
