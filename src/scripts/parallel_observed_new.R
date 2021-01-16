@@ -90,8 +90,8 @@ exempt_plays <- tibble(game_id = c(2017091700,2017091706, 2017091711, 2017092407
                        play_id = c(2288, 2126, 3386, 190, 270, 1702))
 flog.info('Setup complete for general purpose variables. Defining cluster now.', name = 'par_obs')
 
-num_cores <- parallel::detectCores() - 2
-plan(multisession, workers = num_cores)
+#num_cores <- parallel::detectCores() - 2
+#plan(multisession, workers = num_cores)
 
 flog.info('Cluster prepared, running loop.', name = 'par_obs')
 
