@@ -1,7 +1,5 @@
 # Generate the necessary covariates to calculate yards after catch
-library(sp)
-library(rgdal)
-library(rgeos)
+pacman::p_load(sp, rgdal, rgeos)
 
 downfield_x_calc <- function(receiver_data){
   
@@ -205,19 +203,24 @@ get_elig_rec <- function(frame){
            pull(nfl_id))
 }
 
-holder <- tibble()
 
-flog.info("Read in receiver info for observed target on play.", name = "all_time")
-#receiver <- read_csv("C:/Users/mreyers/Documents/GitHub/bdb_3/Data/additional_data/targetedReceiver.csv") %>%
-#  janitor::clean_names()
+if(seasons != 2017) {
+  flog.info("Read in receiver info for observed target on play.", name = "all_time")
+  
+  receiver <- read_csv("C:/Users/mreyers/Documents/GitHub/bdb_3/Data/additional_data/targetedReceiver.csv") %>%
+   janitor::clean_names()
+}
+
 
 plan(multisession, workers = 4)
 epsilon <- 0
 #plan(sequential)
 nbrOfWorkers() # Issue on 40, I have 1:39 and 41:91 done. It is the problem game 2017092407 so must skip
-for(i in 1:91){
+holder <- tibble()
+
+for(i in 1:length(file_list)){
   if(i == 40){
-    print("Skipping game 40")
+    print("Skipping game 40 from 2017, weird data issue. Only 17 files in 2018 so no issue.")
     next
   }
   # This info comes from parallel_observed_new, should probably move it to main
@@ -268,11 +271,15 @@ for(i in 1:91){
     left_join(players %>% dplyr::select(nfl_id, display_name), by = c("target" = "nfl_id")) %>%
     filter(!is.na(target), !is.na(fake_pt), !is.na(qb_check), pass_recorded, check_pass_catchers > 0) %>%
     mutate(receiver = display_name) %>%
-    dplyr::select(-display_name) #%>%
-  # Stuff below here is for bdb_3
-    #dplyr::select(game_id, play_id, data, pass_result) %>%
-    #left_join(receiver, by = c("game_id", "play_id")) %>%
-    #rename(target = target_nfl_id)
+    dplyr::select(-display_name) 
+  
+  if(seasons != 2017) {
+    tracking_additional <- tracking_additional %>%
+      dplyr::select(game_id, play_id, data, pass_result) %>%
+      left_join(receiver, by = c("game_id", "play_id")) %>%
+      rename(target = target_nfl_id)
+  }
+  
   rm(tracking_clean)
   #tictoc::toc()
   
