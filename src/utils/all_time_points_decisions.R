@@ -356,7 +356,7 @@ flog.info('Parallel component established. Now to run.', name = 'all_time')
 # Below is the necessary filtering from earlier
 
 # Lets try to incorporate 3 additional frames, i.e epsilon = 5
-epsilon <- 0
+flog.info(glue("Using epsilon = {epsilon}"))
 
 # Parallelize with future_map
 plan(multisession, workers = max(availableCores() - 2, 1))
@@ -364,7 +364,7 @@ plan(multisession, workers = max(availableCores() - 2, 1))
 # Iteration 1 worked, lets try the rest!
   # Saving data the wrong way, these are game files not weeks
   # Update saving structure and fix weird issues with standardize play
-for(i in 41:91){
+for(i in 1:length(file_list)){
   if(i == 40){
     flog.info("This game is broken, no tracking on certain objects all game. Skip")
     next

@@ -58,8 +58,9 @@ flog.info('Since BDB3 is a thing allow for an option to manipulate incoming data
 # Specify the task of interest. Thesis settings are specified beside as default
 new_age_tracking_data <- FALSE # Default FALSE
 time_of_arrival <- FALSE # Default FALSE
-seasons <- 2017 # Default 2017
 time_of_arrival_explicit <- if_else(time_of_arrival, "arrival", "release")
+seasons <- 2017 # Default 2017
+epsilon <- 5 # Default 5 for paper, 0 for standard play up to pass release
 
 # # # # # # # #
 # Task 0: Set up global parameters to be called from additional scripts
@@ -100,6 +101,9 @@ flog.info("There will be a greater need for interception probability shortly.
 source('scripts/prob_incomplete.R')
 source('scripts/yac_covariates.R')
 flog.info('Completed building frame by frame covariates. Onto prediction.', name = 'main')
+
+# Should be up to here at this point. Going to save everything and test with just
+# 1 input file from 2017, then 1 from 2018.
 
 # # # # # # # # # # # # # # # # # #
 # Task 4: Predict frame by frame catch probability

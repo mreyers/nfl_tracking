@@ -1,24 +1,24 @@
 # Additional all time points results
 
 # # # # # 
-flog.info('Starting additional all time points. This should be incorporated into all_time_points')
-epsilon <- 0
+flog.info('Starting additional all time points.
+          This should be incorporated into all_time_points.')
 
+# Fix loop below
 yards_downfield <- tibble()
 proper_names <- tibble()
-for(i in 1:9){
-  print(i)
-  tic()
-  lower <- (i-1) * 10 + 1
-  upper <- i * 10
-  if(i == 9){
-    upper <- upper + 1 # have 91 files
+for(i in 1:length(file_list)){
+  
+  if(i == 40){
+    flog.info("Continue trend of skipping 40th game in 2017")
+    next
   }
   
-  tracking <- read_many_tracking_data("/Data/", lower:upper) %>%
-    group_by(game_id, play_id) %>%
-    join_additional_data("/Data/", players = TRUE) %>%
-    ungroup()
+  tracking <- read_csv(paste0(default_path, file_name)) %>%
+    select_at(select_cols) %>%
+    janitor::clean_names() %>%
+    left_join(players %>% select(-display_name), by = "nfl_id") %>%
+    rename(velocity = s)
   
   # Need possession team for current format
   possession <- get_possession_team(tracking)
@@ -80,12 +80,12 @@ for(i in 1:9){
 }
 
 yards_downfield %>%
-  saveRDS('yards_to_be_gained_5add_frames.rds')
+  saveRDS(glue('{default_path}{time_of_arrival_explicit}/yards_to_be_gained_{epsilon}add_frames.rds'))
 
 # Need to use play results to filter, I forgot I removed this variable
 yards_downfield %>%
   filter(pass_result_2 %in% 'IN') %>%
-  saveRDS('all_frames_interception_covariates_5add_frames.rds')
+  saveRDS(glue('{default_path}{time_of_arrival_explicit}/all_frames_interception_covariates_{epsilon}add_frames.rds'))
 
 rm(yards_downfield)
 gc(verbose=FALSE)
@@ -93,18 +93,19 @@ gc(verbose=FALSE)
 
 proper_names <- tibble()
 for(i in 1:9){
-  print(i)
-  tic()
-  lower <- (i-1) * 10 + 1
-  upper <- i * 10
-  if(i == 9){
-    upper <- upper + 1 # have 91 files
+  if(i == 40){
+    flog.info("Continue trend of skipping 40th game in 2017")
+    next
   }
   
-  tracking <- read_many_tracking_data("/Data/", lower:upper) %>%
-    group_by(game_id, play_id) %>%
-    join_additional_data("/Data/", players = TRUE) %>%
-    ungroup()
+  tracking <- read_csv(paste0(default_path, file_name)) %>%
+    select_at(select_cols) %>%
+    janitor::clean_names() %>%
+    left_join(players %>% select(-display_name), by = "nfl_id") %>%
+    rename(velocity = s)
+  
+  # Need possession team for current format
+  possession <- get_possession_team(tracking)
   
   proper_names <- proper_names %>%
     bind_rows(tracking %>%
