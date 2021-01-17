@@ -253,7 +253,6 @@ for(i in 1:length(file_list)){
            data = map(data, ~standardize_play(., reorient)),
            cleaning = map_dbl(data, ~handle_no_ball(.))) %>%
     filter(!is.na(cleaning), pass_result %in% c('C', 'I', 'IN'))
-  rm(tracking)
   #tictoc::toc()
   # 77 sec
   
@@ -280,7 +279,6 @@ for(i in 1:length(file_list)){
       rename(target = target_nfl_id)
   }
   
-  rm(tracking_clean)
   #tictoc::toc()
   
   # Looks like Brady's data might be messed up for 2017092407
@@ -309,7 +307,7 @@ for(i in 1:length(file_list)){
   holder %>%
     saveRDS('Data/release/yac_covariates.rds')
   
-  rm(tracking, tracking_additional,
+  rm(tracking, tracking_clean, tracking_additional,
      tracking_rel_frames, tracking_yac) # seems like there has been some issues with new set being assigned
   toc()
 }

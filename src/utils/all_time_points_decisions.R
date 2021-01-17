@@ -269,22 +269,18 @@ ownership_metric_wrapper <- function(pass_play, first_elig, last_elig, is_footba
     filter(dplyr::between(frame_id, first_elig, last_elig)) %>%
     mutate(frame_id_2 = frame_id)
   
-  tictoc::tic()
   pass_play <- pass_play %>% # quick fix to deal with nesting, dont want to lose covariate
     nest(-frame_id_2) %>%
     mutate(ball_at_arrival_coords = map(data, pass_arrive_location),
            frame_inf = map(data, ~get_zone_influence(., lazy = TRUE,
                                                      is_football = is_football)))
-  tictoc::toc()
-  
-  tictoc::tic()
+
   pass_play <- pass_play %>%
     mutate(ownership_metrics = pmap(list(data, frame_inf, ball_at_arrival_coords),
                                     ~ownership_at_throw(..1, ..2, 
                                                         ball_speed = 20, run =FALSE,
                                                         ball_coords = ..3))) %>%
     dplyr::select(-data, -frame_inf)
-  tictoc::toc()
   
   return(pass_play)
 }
@@ -344,8 +340,6 @@ joiner_fn <- function(basic_cov, complex_cov){
 
 ###########################################################
 ###########################################################
-#num_cores <- parallel::detectCores() - 2
-plan(sequential) # To be parallelized later, this is for debugging
 
 flog.info('Parallel component established. Now to run.', name = 'all_time')
 
@@ -441,10 +435,10 @@ for(i in 1:length(file_list)){
   # 17 seconds for 5 sequential, 11 seconds parallel
   
   # Quick forced tidy up
-  plan(sequential)
-  gc(verbose = FALSE)
-  cl <- future::makeClusterPSOCK(4L, rscript_libs = c(libs, "*"))
-  plan(cluster, workers = cl)
+  # plan(sequential)
+  # gc(verbose = FALSE)
+  # cl <- future::makeClusterPSOCK(4L, rscript_libs = c(libs, "*"))
+  # plan(cluster, workers = cl)
   
   # Lets see
   tictoc::tic()

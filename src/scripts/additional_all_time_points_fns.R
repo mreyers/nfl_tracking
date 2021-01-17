@@ -14,6 +14,9 @@ for(i in 1:length(file_list)){
     next
   }
   
+  file_name <- file_list[i]
+  save_file_name <- str_extract(file_name, "[A-z0-9_]*")
+  
   tracking <- read_csv(paste0(default_path, file_name)) %>%
     select_at(select_cols) %>%
     janitor::clean_names() %>%
@@ -92,11 +95,14 @@ gc(verbose=FALSE)
 
 
 proper_names <- tibble()
-for(i in 1:9){
+for(i in 1:length(file_list)){
   if(i == 40){
     flog.info("Continue trend of skipping 40th game in 2017")
     next
   }
+  
+  file_name <- file_list[i]
+  save_file_name <- str_extract(file_name, "[A-z0-9_]*")
   
   tracking <- read_csv(paste0(default_path, file_name)) %>%
     select_at(select_cols) %>%

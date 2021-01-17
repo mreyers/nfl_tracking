@@ -113,7 +113,8 @@ parallel_res_unnest <- parallel_res_inf %>%
   unnest(inf_at_pass)
 
 # Save the data to a permanent location as to not have to rerun much
-parallel_res_unnest %>% write_rds(paste0(default_path, "observed_covariates.rds"))
+parallel_res_unnest %>%
+  write_rds(glue("{default_path}{time_of_arrival_explicit}/observed_covariates.rds"))
 tictoc::toc()
 
 rm(parallel_res, parallel_res_scalar,

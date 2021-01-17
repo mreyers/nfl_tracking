@@ -28,17 +28,21 @@ qb_target_plays <- sacks %>%
 # Get the tracking data for these plays
 qb_tracking_plays <- tibble()
 
-for(i in 1:9){
-  lower <- (i-1) * 10 + 1
-  upper <- i * 10
-  if(i == 9){
-    upper <- upper + 1 # have 91 files
+for(i in 1:length(file_list)){
+  if(i == 40){
+    flog.info("This game is broken, no tracking on certain objects all game. Skip")
+    next
   }
   
-  tracking <- read_many_tracking_data("/Data/", lower:upper) %>%
-    group_by(game_id, play_id) %>%
-    join_additional_data("/Data/", players = TRUE) %>%
-    ungroup()
+  file_name <- file_list[i]
+  save_file_name <- str_extract(file_name, "[A-z0-9_]*")
+  
+  # Read in
+  tracking <- read_csv(paste0(default_path, file_name)) %>%
+    select_at(select_cols) %>%
+    janitor::clean_names() %>%
+    left_join(players %>% select(-display_name), by = "nfl_id") %>%
+    rename(velocity = s)
   
   # Need possession team for current format
   possession <- get_possession_team(tracking)
@@ -133,8 +137,8 @@ plan(multisession, workers = 4)
 
 parallel_res_2 <- qb_rush_plays %>%
   filter(game_id != 2017090700 & play_id != 3528) %>%
-  mutate(first_elig = map_int(data, ~first_elig_frame(.)),
-         last_elig = map_int(data, ~last_elig_frame_no_pass(.)) + epsilon,
+  mutate(first_elig = map_dbl(data, ~first_elig_frame(.)),
+         last_elig = map_dbl(data, ~last_elig_frame_no_pass(.)) + epsilon,
          pocket_dist = pmap(list(data, first_elig, last_elig),
                             ~pocket_fixed(..1, ..2, ..3)),
          basic_covariates = future_pmap(list(data, first_elig, last_elig),
@@ -187,8 +191,8 @@ qb_sack_plays <- qb_tracking_plays %>%
   filter(!(game_id == 2017100103 & play_id == 3258))
 
 parallel_sack <- qb_sack_plays %>%
-  mutate(first_elig = map_int(data, ~first_elig_frame(.)),
-         last_elig = map_int(data, ~last_elig_frame_no_pass(.)) + epsilon,
+  mutate(first_elig = map_dbl(data, ~first_elig_frame(.)),
+         last_elig = map_dbl(data, ~last_elig_frame_no_pass(.)) + epsilon,
          pocket_dist = pmap(list(data, first_elig, last_elig),
                             ~pocket_fixed(..1, ..2, ..3)),
          basic_covariates = future_pmap(list(data, first_elig, last_elig),
@@ -233,7 +237,7 @@ parallel_sack_3 <- parallel_sack %>%
 #   slice(1) %>% unnest(covariates) %>% View()
 parallel_res_3 %>%
   bind_rows(parallel_sack_3) %>%
-  saveRDS("Data/release/sack_and_rush_plays_frames.rds")
+  saveRDS(glue("{default_path}{time_of_arrival_explicit}/sack_and_rush_plays_frames.rds"))
 
 
 # Some names in the above are off so I need to replace them
@@ -266,4 +270,4 @@ holder_rush <- parallel_res_3 %>%
 # Stack them and save
 holder %>%
   bind_rows(holder_rush) %>%
-  saveRDS('sack_and_rush_plays_frames.rds')
+  saveRDS(glue("{default_path}{time_of_arrival_explicit}/sack_and_rush_plays_frames.rds"))

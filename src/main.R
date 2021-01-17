@@ -66,6 +66,8 @@ epsilon <- 5 # Default 5 for paper, 0 for standard play up to pass release
 # Task 0: Set up global parameters to be called from additional scripts
 source("scripts/setup.R")
 
+# Test with 1 file
+file_list <- "tracking_gameId_2017090700.csv"
 # # # # # # # # # # # # # # # # # #
 # Task 1: Generate the covariates necessary to calculate probability of catching the ball
 # Load the games, players, and list of plays in the data set
@@ -76,13 +78,16 @@ flog.info('Completed parallel_observed.R. Onto building completion probability.'
 
 # # # # # # # # # # # # # # # # # #
 # Task 2: Use the covariates to calculate P(Catch) 
-source('scripts/tidy_completion_probability.R') 
+source('scripts/tidy_completion_prob.R') 
 flog.info('Completed tidy_build_completion_probability.R
            Onto building frame by frame covariates.', name = 'main')
 
+  # Task 2b): check diagnostics for the trained model
+  source("scripts/basic_comp_prob_diagnostics.R")
+
 # # # # # # # # # # # # # # # # # #
 # Task 3: Generate frame by frame covariates necessary to apply the model
-all_frames <- FALSE # Default TRUE
+all_frames <- TRUE # Default TRUE
 if(all_frames){
   source('utils/all_time_points_decisions.R') 
 } else{
@@ -92,8 +97,11 @@ if(all_frames){
 flog.info("These additional functions handle air yards, dealt with elsewhere.",
           name = "main")
 source('scripts/additional_all_time_points_fns.R') 
+
+# Check this output
 flog.info("There are no sacks and runs to deal with in this data.", name = "main")
 source('scripts/sacks_and_runs.R') # Deal with the covariates for plays that are sacks or runs
+
 flog.info("There will be a greater need for interception probability shortly.
           Update to tidymodels infrastructure when integrated.",
           name = "main")
@@ -108,9 +116,9 @@ flog.info('Completed building frame by frame covariates. Onto prediction.', name
 # # # # # # # # # # # # # # # # # #
 # Task 4: Predict frame by frame catch probability
 # Up to here now!
-source('predict_all_frames.R')
-source('predict_all_frames_interceptions.R')
-source('yac_predictions.R')
+source('scripts/predict_all_frames.R')
+source('scripts/predict_all_frames_interceptions.R')
+source('scripts/yac_predictions.R')
 flog.info('Completed predict_all_frames.R. Onto QB Evaluation step. Next step is not yet documented.', name = 'main')
 
 # # # # # # # # # # # # # # # # # #

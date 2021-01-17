@@ -6,15 +6,17 @@ flog.info('Reading in the data. Looped due to file name.', name = 'all_pred')
 
 # Read in because of earlier memory challenges
 all_frames_data <- tibble()
-covariate_files <- list.files("Data/release", pattern = "all_frames_covariates")
+covariate_files <- list.files(paste0(default_path, time_of_arrival_explicit),
+                              pattern = "all_frames_covariates")
 for(i in 1:length(covariate_files)){
   
-  temp <- readRDS(paste0("Data/release/", covariate_files[i]))
+  temp <- readRDS(paste0(default_path, time_of_arrival_explicit, covariate_files[i]))
   all_frames_data <- all_frames_data %>%
     bind_rows(temp)
+  rm(temp)
 }
 
-sack_data <- readRDS('Data/release/sack_and_rush_plays_frames.rds')
+sack_data <- readRDS(glue('{default_path}{time_of_arrival_explicit}/sack_and_rush_plays_frames.rds'))
 
 all_frames_data <- all_frames_data %>%
   bind_rows(sack_data)
