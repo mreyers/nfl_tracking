@@ -331,13 +331,14 @@ comp_prob_test %>%
   summarize(exp_cp = mean(.pred_C),
             obs_cp = mean(pass_result_f == "C"),
             n = n()) %>%
-  ggplot(aes(x = exp_cp, y = obs_cp, size =3)) +
+  ggplot(aes(x = exp_cp, y = obs_cp, size =5)) +
   geom_point() +
   geom_abline(intercept = 0, slope = 1, col = "red", lty = 2) +
-  ggtitle("Calibration of Completion Probability with Ownership") +
+  #ggtitle("Calibration of Completion Probability with Ownership") +
   xlab("Expected CP") + ylab("Observed CP") +
   theme_bw() +
-  theme(legend.position = "none")
+  theme(legend.position = "none",
+        text = element_text(size = 20, face = "bold"))
   
 
 # Diagnostics
