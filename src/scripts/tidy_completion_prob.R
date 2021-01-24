@@ -2,57 +2,10 @@
 # Load in parallel_observed.R results
 # Be sure to run all the functions from the QB_evaluation file first
 
-ngs_features <- readRDS(paste0(default_path, "observed_covariates.rds"))
+ngs_features <- readRDS(glue("{default_path}{time_of_arrival_explicit}/observed_covariates.rds"))
 
 
 flog.info('Data loaded', name = 'comp_prob')
-
-flog.info('Loading in standard nflscrapR data. Have updated to nflfastR
-          and require just minimal changes to adjust. This assumes
-          that a user only wants 2017 data. Come change the range
-          of season to get more data.', name = 'comp_prob')
-
-games_reduced <- games %>%
-  select(game_id, home_team_abbr, visitor_team_abbr)
-
-# One weird yards to go / distance combo in PHI vs ATL, not sure why, probably data record error
-seasons <- 2017
-
-if(seasons == 2018){
-  # 2018, or BDB 3, has different plays structure
-  nfl_pbp <- plays %>%
-    left_join(games_reduced, by = "game_id") %>%
-    mutate(yardline_100 = if_else(is.na(absolute_yardline_number),
-                                  yardline_number + 
-                                    (50 - yardline_number) * as.numeric(yardline_side != possession_team),
-                                  # For non-missing, just need to reduce by 10
-                                  absolute_yardline_number - 10),
-           # Just in case
-           yardline_100 = if_else(is.na(yardline_100), 50, yardline_100),
-           score_differential = if_else(possession_team == home_team_abbr,
-                                        pre_snap_home_score - pre_snap_visitor_score,
-                                        -1 * (pre_snap_home_score - pre_snap_visitor_score)),
-           is_redzone = factor(yardline_100 < 20, levels = c(FALSE, TRUE))) %>%
-    dplyr::select(game_id,
-                  play_id, yardline_100, down, ydstogo = yards_to_go,
-                  score_differential, is_redzone, number_of_pass_rushers)
-} else {
-  # 2017, or BDB 1, has some slight modifications needed to generate the above
-  nfl_pbp <- plays %>%
-    left_join(games_reduced, by = "game_id") %>%
-    filter(!is.na(pass_result)) %>%
-    mutate(yardline_100 = if_else(possession_team == yardline_side,
-                                  100 - yardline_number,
-                                  yardline_number),
-           yardline_100 = if_else(is.na(yardline_100), 50, yardline_100),
-           score_differential = if_else(home_team_abbr == possession_team,
-                                        visitor_score_before_play - home_score_before_play,
-                                        home_score_before_play - visitor_score_before_play),
-           is_redzone = factor(yardline_100 < 20, levels = c(FALSE, TRUE))) %>%
-    select(game_id,
-           play_id, yardline_100, down, ydstogo = yards_to_go,
-           score_differential, is_redzone, number_of_pass_rushers)
-}
 
 
 flog.info('Set up really simple data splitting. Can obviously
@@ -106,24 +59,23 @@ specific_vars_at_release <- new_features %>%
 # Probably could improve further by adding separations at arrival
 # I believe these separations are currently at release
 
-# specific_vars_at_arrival <- new_features %>%
-#   ungroup() %>%
-#   select(pass_result_f, air_dist, rec_separation,
-#          sideline_sep, 
-#          qb_vel, time_to_throw, dist_from_pocket, 
-#          # Ownership Features, only used 1 due to colinearity
-#          n_cells = n_cells_at_arrival,
-#          own_intensity = own_intensity_at_arrival,
-#          own_avg_intensity = own_avg_intensity_at_arrival,
-#          # Additional features that differ slightly
-#          air_yards_x,
-#          # Context Features
-#          yardline_100, down, ydstogo)
+specific_vars_at_arrival <- new_features %>%
+  ungroup() %>%
+  select(pass_result_f, air_dist, rec_separation,
+         sideline_sep,
+         qb_vel, time_to_throw, dist_from_pocket,
+         # Ownership Features, only used 1 due to colinearity
+         n_cells = n_cells_at_arrival,
+         own_intensity = own_intensity_at_arrival,
+         own_avg_intensity = own_avg_intensity_at_arrival,
+         # Additional features that differ slightly
+         air_yards_x,
+         # Context Features
+         yardline_100, down, ydstogo)
 
 # Using 75/25 split instead of 85/15 as in paper
 set.seed(1312020)
-type <- "release" # "release" / "arrival"
-if(type == "arrival"){
+if(time_of_arrival_explicit == "arrival"){
   splits <- initial_split(specific_vars_at_arrival, 0.75, strata = pass_result_f)
 } else{
   splits <- initial_split(specific_vars_at_release, 0.75, strata = pass_result_f)
@@ -136,17 +88,11 @@ test_ngs <- testing(splits)
 # Change the recipe such that ownership only is PCA'd, too heavily correlated but useful
 thesis_recipe <- recipe(pass_result_f ~ ., data = train_ngs) %>%
   # Just this column has <10 NAs, breaking workflow
-  #step_knnimpute(own_avg_intensity, number_of_pass_rushers) %>%
-  #step_zv(all_predictors()) %>%
+  step_knnimpute(own_avg_intensity, number_of_pass_rushers) %>%
+  step_zv(all_predictors()) %>%
   step_num2factor(down, levels = c("1", "2", "3", "4")) %>%
-  step_rm(
-    n_cells, own_intensity, own_avg_intensity,
-    down, position_f, is_redzone, number_of_pass_rushers,
-    ydstogo, yardline_100, score_differential,
-    rec_separation, qb_vel, time_to_throw, dist_from_pocket
-    ) #%>%
-  #step_pca(n_cells, own_intensity, own_avg_intensity) %>%
-  #step_dummy(down, position_f, is_redzone)
+  step_pca(n_cells, own_intensity, own_avg_intensity) %>%
+  step_dummy(down, position_f, is_redzone)
 
 comp_prob_wflow <- workflow() %>%
   add_recipe(thesis_recipe)

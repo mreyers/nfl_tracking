@@ -2,7 +2,7 @@ flog.appender(appender.file('logs/inc_int_model.log'), 'inc')
 flog.info('Start of incompletion and interception modeling', name = 'inc')
 
 # This is currently just interceptions, also need the incomplete plays which are stored elsewhere
-all_inc_and_int <- readRDS("Data/observed_covariates.rds") %>%
+all_inc_and_int <- readRDS(glue("{default_path}{time_of_arrival_explicit}/observed_covariates.rds")) %>%
   filter(pass_result %in% c('I', 'IN'))
 
 
@@ -45,8 +45,7 @@ specific_vars_at_release <- all_passes %>%
          score_differential, is_redzone, number_of_pass_rushers, position_f)
 
 set.seed(1312020)
-type <- "release" # "release" / "arrival"
-if(type == "arrival"){
+if(time_of_arrival_explicit == "arrival"){
   splits <- initial_split(specific_vars_at_arrival, 0.75)
 } else{
   splits <- initial_split(specific_vars_at_release, 0.75)
@@ -153,4 +152,4 @@ nnet_final <- int_prob_wflow %>%
   fit(specific_vars_at_release)
 
 # Save the model, run it in predict_all_frames_incomplete
-saveRDS(nnet_final, glue::glue("{default_path}{type}/int_prob.rds"))
+saveRDS(nnet_final, glue::glue("{default_path}{time_of_arrival_explicit}/int_prob.rds"))

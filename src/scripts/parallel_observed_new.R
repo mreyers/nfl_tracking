@@ -9,22 +9,6 @@ flog.appender(appender.file('logs/parallel_observed.log'), 'par_obs')
 flog.info('Start of parallel_observed.R. Computing relevant covariates for all observed passes in 
           the input tracking data.', name = 'par_obs')
 
-default_path <- "Data/"
-select_cols <- c("time", "x", "y", "s",
-                 "dis", "dir", "event",
-                 "nflId", "displayName", "jerseyNumber",
-                 "team", "frame.id", "gameId", "playId")
-file_list <- list.files(default_path, pattern = "tracking_gameId_[0-9]+.csv")
-
-if(new_age_tracking_data){
-  default_path <- "Data_new/"
-  select_cols <- c("time", "x", "y", "s",
-                   "dis", "dir", "event",
-                   "nflId", "displayName", "jerseyNumber",
-                   "team", "frameId", "gameId", "playId")
-  file_list <- list.files(default_path, pattern = "week[0-9]+.csv")
-}
-
 all_data_set <- tibble()
 for(i in 1:length(file_list)){
   new_data <- read_csv(paste0(default_path, file_list[i])) %>%
@@ -35,60 +19,6 @@ for(i in 1:length(file_list)){
     bind_rows(new_data)
 }
 
-# Load the games, players, and list of plays in the data set
-games <- read_csv(paste0(default_path, "games.csv"), col_types = cols()) %>%
-  janitor::clean_names()
-players <- read_csv(paste0(default_path, "players.csv"), col_types = cols()) %>%
-  janitor::clean_names()
-plays <- read_csv(paste0(default_path, "plays.csv"), col_types = cols()) %>%
-  janitor::clean_names()
-
-if(!new_age_tracking_data){
-  # Change name scheme just to maintain consistency, even though relabeled again below
-  players <- players %>%
-    unite("display_name", c(first_name, last_name), sep = " ") %>%
-    select(nfl_id, display_name, position = position_abbr)
-}
-
-players <- players %>%
-  dplyr::select(nfl_id, display_name, position)
-
-# Gather positions that I need for analysis, eligible receivers and defensive players
-player_pos_id_key <- players %>%
-  dplyr::select(nfl_id, position)
-
-route_runners_pos_id_key <- player_pos_id_key %>%
-  filter(position %in% c("RB", "FB", "WR", "TE", "OLB", "SS", "ILB", "DE", "CB", "NT",
-                              "MLB", "FS", "DT", "LB", "DB"))
-
-# For play standardization
-reorient <- FALSE
-
-# Also need the play_ids which are the plays that had passes
-play_ids <- plays %>%
-  filter(!is.na(pass_result)) %>% 
-  select(game_id, play_id, pass_result)
-
-# Generic event labels
-pass_air_end <- 
-  c(# "pass_arrived",
-    "pass_outcome_caught",
-    "pass_outcome_incomplete",
-    # "pass_tipped",
-    "touchdown",
-    "pass_outcome_interception",
-    "pass_outcome_touchdown"
-  )
-
-pass_air_start <-
-  c("pass_forward",
-    "pass_shovel"
-  )
-
-# Plays and games that had specific, unresolvable issues (generally broken tracking data for player/ball)
-exempt_plays <- tibble(game_id = c(2017091700,2017091706, 2017091711, 2017092407, 2017092407, 2017091007), 
-                       play_id = c(2288, 2126, 3386, 190, 270, 1702))
-flog.info('Setup complete for general purpose variables. Defining cluster now.', name = 'par_obs')
 
 #num_cores <- parallel::detectCores() - 2
 #plan(multisession, workers = num_cores)
@@ -183,7 +113,8 @@ parallel_res_unnest <- parallel_res_inf %>%
   unnest(inf_at_pass)
 
 # Save the data to a permanent location as to not have to rerun much
-parallel_res_unnest %>% write_rds(paste0(default_path, "observed_covariates.rds"))
+parallel_res_unnest %>%
+  write_rds(glue("{default_path}{time_of_arrival_explicit}/observed_covariates.rds"))
 tictoc::toc()
 
 rm(parallel_res, parallel_res_scalar,

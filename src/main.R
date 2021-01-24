@@ -55,14 +55,19 @@ flog.info('Since BDB3 is a thing allow for an option to manipulate incoming data
            allow for user to switch between at time of throw and at time of arrival.',
            name = 'main')
 
-new_age_tracking_data <- FALSE
-time_of_arrival <- FALSE
+# Specify the task of interest. Thesis settings are specified beside as default
+new_age_tracking_data <- FALSE # Default FALSE
+time_of_arrival <- FALSE # Default FALSE
 time_of_arrival_explicit <- if_else(time_of_arrival, "arrival", "release")
+seasons <- 2017 # Default 2017
+epsilon <- 5 # Default 5 for paper, 0 for standard play up to pass release
 
 # # # # # # # #
-# Task 0: Should probably do a parameter setting piece instead of grabbing parts
-# of parallel_observed_new.R
+# Task 0: Set up global parameters to be called from additional scripts
+source("scripts/setup.R")
 
+# Test with 1 file
+file_list <- "tracking_gameId_2017090700.csv"
 # # # # # # # # # # # # # # # # # #
 # Task 1: Generate the covariates necessary to calculate probability of catching the ball
 # Load the games, players, and list of plays in the data set
@@ -73,13 +78,16 @@ flog.info('Completed parallel_observed.R. Onto building completion probability.'
 
 # # # # # # # # # # # # # # # # # #
 # Task 2: Use the covariates to calculate P(Catch) 
-source('scripts/tidy_completion_probability.R') 
+source('scripts/tidy_completion_prob.R') 
 flog.info('Completed tidy_build_completion_probability.R
            Onto building frame by frame covariates.', name = 'main')
 
+  # Task 2b): check diagnostics for the trained model
+  source("scripts/basic_comp_prob_diagnostics.R")
+
 # # # # # # # # # # # # # # # # # #
 # Task 3: Generate frame by frame covariates necessary to apply the model
-all_frames <- FALSE
+all_frames <- TRUE # Default TRUE
 if(all_frames){
   source('utils/all_time_points_decisions.R') 
 } else{
@@ -88,22 +96,29 @@ if(all_frames){
 
 flog.info("These additional functions handle air yards, dealt with elsewhere.",
           name = "main")
-source('additional_all_time_points_fns.R') 
+source('scripts/additional_all_time_points_fns.R') 
+
+# Check this output
 flog.info("There are no sacks and runs to deal with in this data.", name = "main")
-source('sacks_and_runs.R') # Deal with the covariates for plays that are sacks or runs
+source('scripts/sacks_and_runs.R') # Deal with the covariates for plays that are sacks or runs
+
 flog.info("There will be a greater need for interception probability shortly.
           Update to tidymodels infrastructure when integrated.",
           name = "main")
-# Up to here now!
-#source('prob_incomplete.R')  <- do this one tomorrow
-source('yac_covariates.R')
+
+source('scripts/prob_incomplete.R')
+source('scripts/yac_covariates.R')
 flog.info('Completed building frame by frame covariates. Onto prediction.', name = 'main')
+
+# Should be up to here at this point. Going to save everything and test with just
+# 1 input file from 2017, then 1 from 2018.
 
 # # # # # # # # # # # # # # # # # #
 # Task 4: Predict frame by frame catch probability
-source('predict_all_frames.R')
-source('predict_all_frames_interceptions.R')
-source('yac_predictions.R')
+# Up to here now!
+source('scripts/predict_all_frames.R')
+source('scripts/predict_all_frames_interceptions.R')
+source('scripts/yac_predictions.R')
 flog.info('Completed predict_all_frames.R. Onto QB Evaluation step. Next step is not yet documented.', name = 'main')
 
 # # # # # # # # # # # # # # # # # #
