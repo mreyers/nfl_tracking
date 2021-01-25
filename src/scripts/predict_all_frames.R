@@ -8,9 +8,11 @@ flog.info('Reading in the data. Looped due to file name.', name = 'all_pred')
 all_frames_data <- tibble()
 covariate_files <- list.files(paste0(default_path, time_of_arrival_explicit),
                               pattern = "all_frames_covariates")
+
+# For debugging and testing
+covariate_files <- covariate_files[1]
 for(i in 1:length(covariate_files)){
-  
-  temp <- readRDS(paste0(default_path, time_of_arrival_explicit, covariate_files[i]))
+  temp <- readRDS(glue("{default_path}{time_of_arrival_explicit}/{covariate_files[i]}"))
   all_frames_data <- all_frames_data %>%
     bind_rows(temp)
   rm(temp)
@@ -18,11 +20,13 @@ for(i in 1:length(covariate_files)){
 
 sack_data <- readRDS(glue('{default_path}{time_of_arrival_explicit}/sack_and_rush_plays_frames.rds'))
 
-all_frames_data <- all_frames_data %>%
+sack_data <- sack_data %>%
+  unnest(covariates)
+
+all_together_temp <- all_frames_data %>%
   bind_rows(sack_data)
 
-# Quick fix for a column that is still nested
-temp <- all_frames_data %>% 
+temp <- all_together_temp %>% 
   group_by(game_id, play_id) %>% 
   slice(1) %>%
   select(game_id, play_id, first_elig, last_elig, pocket_dist) %>%
@@ -30,13 +34,14 @@ temp <- all_frames_data %>%
   mutate(frame_id_2 = first_elig + row_number() - 1) %>%
   select(game_id, play_id, frame_id_2, dist_from_pocket)
 
-all_frames_data <- all_frames_data %>%
+all_together <- all_together_temp %>%
   dplyr::select(-pocket_dist) %>%
   left_join(temp, by = c('game_id', 'play_id', 'frame_id_2'))
 
+
 # Time to redo predictions in the more appropriate tidymodels framework
 # So long h2o, you were a real one
-cp_at_release_model <- readRDS("~/GitHub/nfl_tracking/src/Data/release/comp_prob.rds")
+cp_at_release_model <- readRDS("~/GitHub/nfl_tracking/src/Data/release/comp_prob_with_ownership.rds")
 
 glimpse(cp_at_release_model$train)
 
@@ -63,7 +68,7 @@ names(all_frames_data)
 
 
 # Actual covariates I need
-all_covariates_data <- all_frames_data %>%
+all_covariates_data <- all_together %>%
   ungroup() %>%
   mutate(pass_result_fake = if_else(pass_result == "C", "C", "I"),
          pass_result_f = factor(pass_result_fake, levels = c("C", "I"))) %>% 
@@ -97,11 +102,12 @@ all_covariates_and_preds <- all_covariates_data %>%
   bind_cols(predict(cp_at_release_model, ., type = "prob"))
 
 # Need to add back game_id and play_id
-add_game_play_cols <- all_frames_data %>%
+add_game_play_cols <- all_together %>%
   filter(!is.na(rec_separation), !is.na(air_yards_x)) %>%
   select(game_id, play_id, nfl_id, display_name, target, frame_id_2)
 
 all_covariates_preds_and_ids <- add_game_play_cols %>%
   bind_cols(all_covariates_and_preds)
 
-saveRDS(all_covariates_preds_and_ids, "Data/release/all_covariates_preds_and_ids.rds")
+saveRDS(all_covariates_preds_and_ids,
+        glue("{default_path}{time_of_arrival_explicit}/all_covariates_preds_and_ids.rds"))

@@ -115,9 +115,9 @@ flog.info('Completed building frame by frame covariates. Onto prediction.', name
 
 # # # # # # # # # # # # # # # # # #
 # Task 4: Predict frame by frame catch probability
-# Up to here now!
 source('scripts/predict_all_frames.R')
 source('scripts/predict_all_frames_interceptions.R')
+# Up to here now! WIP, almost through the model train
 source('scripts/yac_predictions.R')
 flog.info('Completed predict_all_frames.R. Onto QB Evaluation step. Next step is not yet documented.', name = 'main')
 

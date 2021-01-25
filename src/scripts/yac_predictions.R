@@ -1,46 +1,51 @@
 # Do the actual yards after catch modeling to generate yac predictions
-yac_covariates <- readRDS('Data/yac_covariates_apr_20_5add_frames.rds') %>%
+yac_covariates <- readRDS(
+  glue('{default_path}{time_of_arrival_explicit}/yac_covariates.rds')
+  ) %>%
   unnest(yac_estimate) %>%
   select(-yac_estimate)
 
-nfl_scrapr_stuff <- read_csv('reg_pbp_2017.csv', col_types = cols()) %>%
-  dplyr::select(game_id, play_id, yards_after_catch)
+# Just need the final frame for targeted receiver
+  # This will be last frame but for all receivers, filter on join
+yac_covariates_observed <- yac_covariates %>%
+  group_by(game_id, play_id, elig_receivers) %>%
+  arrange(desc(frame_id)) %>%
+  slice(1)
+
+# Load additional data, use nflfastR
+flog.info(glue("Loading the data from the {seasons} season"))
+nflfastr_stuff <- readRDS(
+    url(
+      glue::glue("https://raw.githubusercontent.com/guga31bb/nflfastR-data/master/data/play_by_play_{seasons}.rds")
+    )
+  ) %>%
+  # Need to grab observed YAC and the side of field (left/middle/right) of pass
+  dplyr::select(game_id = old_game_id, play_id, yards_after_catch, pass_location)
 
 # Now to join it with the data set
-observed_target <- readRDS('observed_covariates1_10.rds') %>%
-  bind_rows(readRDS('observed_covariates11_20.rds')) %>%
-  bind_rows(readRDS('observed_covariates21_30.rds')) %>%
-  bind_rows(readRDS('observed_covariates31_40.rds')) %>%
-  bind_rows(readRDS('observed_covariates41_50.rds')) %>%
-  bind_rows(readRDS('observed_covariates51_60.rds')) %>%
-  bind_rows(readRDS('observed_covariates61_70.rds')) %>%
-  bind_rows(readRDS('observed_covariates71_80.rds')) %>%
-  bind_rows(readRDS('observed_covariates81_91.rds')) 
+observed_target <- readRDS(glue(
+  '{default_path}{time_of_arrival_explicit}/observed_covariates.rds')
+  )
 
 observed_target <- observed_target %>%
-  left_join(yac_covariates, by = c('game_id', 'play_id'))
+  left_join(yac_covariates_observed, by = c('game_id', 'play_id'))
 
 # Try a simple h2o build model
 set.seed(1312020)
 observed_target <- observed_target %>%
+  mutate(game_id = as.character(game_id)) %>%
   filter(pass_result %in% 'C') %>% # YAC only on completions
-  left_join(nfl_scrapr_stuff, by = c('game_id', 'play_id')) %>%
+  left_join(nflfastr_stuff, by = c('game_id', 'play_id')) %>%
   mutate(set = sample(c('train', 'test'),
                       size = n(), replace = TRUE, prob = c(0.85, 0.15)))
 
-side_of_field_stuff <- read_rds('pbp_17.rds')
-
+# Remove the ones with NA pass_locations, necessary for model
 observed_target <- observed_target %>%
-  left_join(side_of_field_stuff) %>%
   filter(!is.na(pass_location))
 
 # Need to grab only the receiver with the ball
 observed_target <- observed_target %>%
-  group_by(game_id, play_id) %>% 
-  filter(elig_receivers %in% receiver) %>%
-  arrange(desc(frame_id)) %>%
-  slice(1) %>%
-  ungroup()
+  filter(elig_receivers == target)
 
 ngs_train <- observed_target %>%
   filter(set %in% 'train')
@@ -49,6 +54,9 @@ ngs_test <- observed_target %>%
   filter(set %in% 'test') %>%
   mutate(yards_after_catch = if_else(is.na(yards_after_catch), 0, yards_after_catch))
 
+# Try h2o and normal stacking approach, curious if similar performance
+  # h2o is pretty cool though
+  # Will need to be tested more thoroughly in full run
 
 # h2o section
 h2o::h2o.init(max_mem_size = '4G')
