@@ -204,3 +204,4 @@ comp_prob_stack
 
 # Save the model
 saveRDS(comp_prob_stack, glue("{default_path}{type}/comp_prob_with_ownership.rds"))
+saveRDS(test_ngs, glue("{default_path}{type}/comp_prob_test_set.rds"))
