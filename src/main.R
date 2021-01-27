@@ -117,7 +117,7 @@ flog.info('Completed building frame by frame covariates. Onto prediction.', name
 # Task 4: Predict frame by frame catch probability
 source('scripts/predict_all_frames.R')
 source('scripts/predict_all_frames_interceptions.R')
-# Up to here now! WIP, almost through the model train. Need to now check blend_predictions()
+  # Need to now check blend_predictions()
   # Current issue is in_id must be a positive integer vector, probably messed up bc sample size
 source('scripts/yac_predictions.R')
   # Check YAC diagnostics, validate model
