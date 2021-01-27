@@ -14,11 +14,7 @@ yac_covariates_observed <- yac_covariates %>%
 
 # Load additional data, use nflfastR
 flog.info(glue("Loading the data from the {seasons} season"))
-nflfastr_stuff <- readRDS(
-    url(
-      glue::glue("https://raw.githubusercontent.com/guga31bb/nflfastR-data/master/data/play_by_play_{seasons}.rds")
-    )
-  ) %>%
+nflfastr_stuff_yac <- nflfastr_stuff %>%
   # Need to grab observed YAC and the side of field (left/middle/right) of pass
   dplyr::select(game_id = old_game_id, play_id, yards_after_catch, pass_location)
 
@@ -48,7 +44,7 @@ set.seed(1312020)
 observed_target <- observed_target %>%
   mutate(game_id = as.character(game_id)) %>%
   filter(pass_result %in% 'C') %>% # YAC only on completions
-  left_join(nflfastr_stuff, by = c('game_id', 'play_id')) %>%
+  left_join(nflfastr_stuff_yac, by = c('game_id', 'play_id')) %>%
   mutate(set = sample(c('train', 'test'),
                       size = n(), replace = TRUE, prob = c(0.75, 0.25)))
 

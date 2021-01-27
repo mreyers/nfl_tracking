@@ -8,7 +8,37 @@ flog.info('EP was previously calculated using a lazy approach. Doing it
 # devtools::install_github(repo = "maksimhorowitz/nflscrapR")
 library(nflscrapR)
 
-nfl_data <- read_csv('~/Github/thesis/reg_pbp_2017.csv', col_types = cols())
+# Update data to nflfastR
+ep_requirements <- nflfastr_stuff %>%
+  dplyr::select(game_id = old_game_id, play_id, half_seconds_remaining,
+                yardline_100, down, ydstogo,
+                season, home_team, posteam, roof, posteam_timeouts_remaining,
+                # This is a relic to compare against nflscrapR model
+                goal_to_go)
+# Don't need to load sysdata in nflfastR, can just use their helper function
+# To use, must have:
+  #' season, home_team
+  #' posteam, roof (coded as 'outdoors', 'dome', or {'open' / 'closed' / NA} (retractable))}
+  #' half_seconds_remaining, yardline_100, down, ydstogo,
+  #' posteam_timeouts_remaining
+
+
+# 
+play_params <- ep_requirements %>%
+  filter(game_id ==2017090700, play_id == 68)
+# 
+initial_ep <- nflscrapR::calculate_expected_points(play_params, "half_seconds_remaining",
+                                        "yardline_100", "down", "ydstogo", "goal_to_go")
+
+# Now to do a super fun full refactor to accommodate nflfastR
+ep_for_receivers_fastr <- function(all_frames_with_pbp_fastr){
+  
+  # * Goal: Can I make the ep_for_receivers_exact function in
+    # * nflfastr?
+    # * In record time?
+  # * Will require me to vectorize more, previous version was a pmap setup
+  # * but made some inefficiencies in the function definition
+}
 
 # I can use most of these parameters with the actual play to define starting EP
 # Now to adjust the function that I use to estimate EP currently

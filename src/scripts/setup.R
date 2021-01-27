@@ -117,3 +117,10 @@ if(seasons == 2018){
            play_id, yardline_100, down, ydstogo = yards_to_go,
            score_differential, is_redzone, number_of_pass_rushers)
 }
+
+# Additional pertinent data/ep from nflfastR
+nflfastr_stuff <- readRDS(
+  url(
+    glue::glue("https://raw.githubusercontent.com/guga31bb/nflfastR-data/master/data/play_by_play_{seasons}.rds")
+  )
+)
