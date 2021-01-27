@@ -1,0 +1,3 @@
+Error tracker to look into when rerunning everything
+
+1. "Data_from_complete_runs/Data/release/all_preds_and_covariates_complete.rds" has duplicated observations for every receiver except the QB, undesired

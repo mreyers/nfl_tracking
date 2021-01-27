@@ -30,6 +30,23 @@ play_params <- ep_requirements %>%
 initial_ep <- nflscrapR::calculate_expected_points(play_params, "half_seconds_remaining",
                                         "yardline_100", "down", "ydstogo", "goal_to_go")
 
+# Full data set is a combination of yards_downfield and YAC estimates at each frame
+  # Simpler dataset, grab the minimal
+yards_downfield <- readRDS(glue('{default_path}{time_of_arrival_explicit}/yards_to_be_gained_{epsilon}add_frames.rds')) %>%
+  filter(game_id == 2017090700, play_id == 68) %>%
+  select(game_id, play_id, nfl_id, frame_id, arrival_x, yards_downfield)
+  # Running dataset, include all fields
+yards_after_catch_est <- readRDS("Data_from_complete_runs/Data/release/all_preds_and_covariates_complete.rds") %>%
+  filter(game_id == 2017090700, play_id == 68)
+
+all_yards_measures <- yards_after_catch_est %>%
+  left_join(yards_downfield, by = c("game_id", "play_id", "nfl_id", "frame_id_2" = "frame_id")) %>%
+  group_by(game_id, play_id, nfl_id, frame_id_2) %>%
+  slice(1) %>% 
+  ungroup()
+
+# # # Continue here
+
 # Now to do a super fun full refactor to accommodate nflfastR
 ep_for_receivers_fastr <- function(all_frames_with_pbp_fastr){
   
@@ -38,6 +55,8 @@ ep_for_receivers_fastr <- function(all_frames_with_pbp_fastr){
     # * In record time?
   # * Will require me to vectorize more, previous version was a pmap setup
   # * but made some inefficiencies in the function definition
+  
+  
 }
 
 # I can use most of these parameters with the actual play to define starting EP

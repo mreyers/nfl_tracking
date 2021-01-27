@@ -119,13 +119,14 @@ source('scripts/predict_all_frames.R')
 source('scripts/predict_all_frames_interceptions.R')
   # Need to now check blend_predictions()
   # Current issue is in_id must be a positive integer vector, probably messed up bc sample size
-source('scripts/yac_predictions.R')
+source('scripts/yac_predictions.R') # Not done yet, needs to predict all frames
   # Check YAC diagnostics, validate model
   source('scripts/yac_diagnostics.R') # Need to test 
 flog.info('Completed predict_all_frames.R. Onto QB Evaluation step. Next step is not yet documented.', name = 'main')
 
 # # # # # # # # # # # # # # # # # #
 # Task 5: Summarize QB Performance
+# Now down to here! Build the nflfastR version of the function
 source('redo_ep.R')
 source('qb_eval_step.R') # Figure out why this is breaking, clearly relevant to nflscrapR
 # and the changes to the NFL API. Problem is in wp_function(), seems fixable

@@ -196,6 +196,13 @@ yac_stack
 saveRDS(yac_stack, glue("{default_path}{time_of_arrival_explicit}/yac_stack_model.rds"))
 saveRDS(test_ngs, glue("{default_path}{time_of_arrival_explicit}/yac_test_set.rds"))
 
+
+# Now predict the model on all frames
+all_frames_data <- readRDS(glue::glue("{default_path}{time_of_arrival_explicit}/all_covariates_and_all_preds.rds"))
+# all_frames_data <- readRDS("Data_from_complete_runs/Data/release/all_covariates_preds_and_ids.rds")
+preds <- predict(yac_stack, all_frames_data)
+
+
 # Try h2o and normal stacking approach, curious if similar performance
   # h2o is pretty cool though
   # Will need to be tested more thoroughly in full run
