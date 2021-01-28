@@ -128,6 +128,9 @@ flog.info('Completed predict_all_frames.R. Onto QB Evaluation step. Next step is
 # Task 5: Summarize QB Performance
 # Now down to here! Build the nflfastR version of the function
 source('redo_ep.R')
+  # Refactor of nflfastR EP seems good!
+  # Next step: Refactor of nflfastR WP
+
 source('qb_eval_step.R') # Figure out why this is breaking, clearly relevant to nflscrapR
 # and the changes to the NFL API. Problem is in wp_function(), seems fixable
 flog.info('Analysis complete. Relevant objects are in this R environment or in %s.', getwd(), name = 'main')
