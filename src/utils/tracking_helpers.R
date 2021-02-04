@@ -80,73 +80,6 @@ animate_play <- function(example.play, standardized = FALSE, complete = NA){
   animate(animate.play, fps = 7, nframe = play.length.ex)
 }
 
-# The play by play tracking data is stored in one big csv for now
-# Need a function to read in the data and parse it accordingly
-read_tracking_data <- function(file_path){
-  # Most efficient function I have found for this is the fread function from library(data.table)
-  basic_data <- fread(file_path, header = T, sep = ',') %>%
-    rename_all(to_snake_case) %>%
-    rename(velocity = s)
-  
-  return(basic_data)
-}
-
-# Read multiple files simultaneously provided a directory
-read_many_tracking_data <- function(data_directory, seq_files = NA){
-  
-  root <- paste0(getwd(), data_directory)
-  
-  games_tracking <- paste0(root, list.files(root, "^tracking"))
-  
-  if(is.na(seq_files)){
-    read_in_games <- lapply(games_tracking, read_tracking_data) %>%
-      bind_rows()
-  } else{
-    read_in_games <- lapply(games_tracking[seq_files], read_tracking_data) %>%
-      bind_rows()
-  }
-  
-  
-  return(read_in_games)
-}
-
-
-
-# Join the tracking data with the other datasets (plays, players, and games)
-join_additional_data <- function(tracking_data, data_directory,
-                                 games = FALSE, players = FALSE, plays = FALSE){
-  # Takes generic tracking data and joins it with other relevant input files
-  # Only joins to the data sets as necessary, allows users to specify what matters to them
-  root <- paste0(getwd(), data_directory)
-  
-  if(games){
-    games <- read_csv(paste0(root, 'games.csv'), col_types = cols()) %>%
-      rename_all(to_snake_case)
-    
-    tracking_data <- tracking_data %>%
-      left_join(games, by = c('game_id'))
-  }
-  
-  if(players){
-    players <- read_csv(paste0(root, 'players.csv'), col_types = cols()) %>%
-      rename_all(to_snake_case) %>%
-      select(nfl_id, position = position_abbr, weight = weight)
-    
-    tracking_data <- tracking_data %>%
-      left_join(players, by = c('nfl_id'), col_types = cols())
-  }
-  
-  if(plays){
-    plays <- read_csv(paste0(root, 'plays.csv')) %>%
-      rename_all(to_snake_case)
-    
-    tracking_data <- tracking_data %>%
-      left_join(plays, by = c("game_id", "play_id"))
-  }
-  
-  return(tracking_data)
-}
-
 # Store the R matrix in each row
 makeMatrix <- function(dir) {
   dir <- dir * pi / 180
@@ -255,28 +188,21 @@ get_zone_influence <- function(data, standardized = FALSE, start_or_end = 'start
   # Get positions at time of handoff, really just the same as the individual frame we have
   throw_time_positions <- 
     throw_time_positions %>% 
-    mutate(team2 = ifelse((team == poss_team), "Off","Def"))
-  
-  throw_time_positions <- 
-    throw_time_positions %>%
-    mutate(R = purrr::map(dir, makeMatrix)) #dir -> Dir
-  
-  # Use get_R_i_t to get the value in df
-  throw_time_positions <- 
-    throw_time_positions %>%
-    mutate(R_i_t = get_R_i_t(dis_to_ball),
+    mutate(team2 = ifelse((team == poss_team), "Off","Def"),
+           R = purrr::map(dir, makeMatrix), #dir -> Dir
+           # Use get_R_i_t to get the value in df
+           R_i_t = get_R_i_t(dis_to_ball),
            S_i_t = map2(speed_rat, R_i_t, ~ matrix(
              c((.y + .y * .x) / 2,
                0,
                0,
                (.y - .y * .x) / 2),
              byrow = T, nrow = 2)),
-           mu_i = map2(mu_i_x, mu_i_y, ~ matrix(c(.x, .y), nrow = 2)))
-  
-  throw_time_positions <- 
-    throw_time_positions %>% 
-    mutate(cov_struc = map2(R, S_i_t, ~ .x %*% .y %*% .y %*% solve(.x)))
-  
+           mu_i = map2(mu_i_x, mu_i_y, ~ matrix(c(.x, .y), nrow = 2)),
+           cov_struc = map2(R, S_i_t, ~ .x %*% .y %*% .y %*% solve(.x))) 
+     
+  # Could probably refactor this to grab from nflfastr instead of
+  # the more costly group_by %>% summarize paradigm
   avg_position <- myPlay %>%
     filter(team %in% c("away", "home")) %>%
     mutate(is_poss_team = ifelse(poss_team == team, 1, 0)) %>%
@@ -309,11 +235,13 @@ get_zone_influence <- function(data, standardized = FALSE, start_or_end = 'start
                            s_2 = seq(-10, 53, by = 1)) # previously res, now 1
   
   # Now we will try to do the same thing over all the players in one play
-  # This needs to be normalized by player position at handoff
+  # This needs to be normalized by player position
   density_calc <- 
     throw_time_positions %>% 
+    # Calculate density for each player frame
     mutate(current_density = pmap_dbl(list(x, y, mu_i, cov_struc),
                                       ~ dmvnorm(c(..1, ..2), mean = ..3, sigma = ..4))) %>%
+    # Standardize at each player frame
     mutate(density_val = pmap(list(mu_i, cov_struc, current_density),
                               ~ dmvnorm(data_grid, mean = ..1, sigma = ..2) / ..3))
   

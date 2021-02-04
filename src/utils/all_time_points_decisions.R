@@ -427,7 +427,7 @@ for(i in 1:length(file_list)){
   tictoc::tic()
   parallel_res <- parallel_res %>%
     mutate(basic_covariates = future_pmap(list(data, first_elig, last_elig),
-                                   ~ simple_covariates(..1, ..2, ..3, run = TRUE)),
+                                   ~ simple_covariates(..1, ..2, ..3, run = FALSE)),
            basic_covariates = map2(basic_covariates, pocket_dist,
                                    ~ .x %>% mutate(pocket_dist = list(.y)))) %>%
     dplyr::select(-pocket_dist) # remove from exterior, now mapped it back
